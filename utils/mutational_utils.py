@@ -333,10 +333,10 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                 while not good_pad: 
                     
                     for i,seq in enumerate(seqs):
-                        #if i%2==0 and i!=0:
-                        #    print(i)
+                        if i%2==0 and i!=0:
+                            print(i)
                         full_seq = pad_5s[current_pad].seq + str(seq.seq).upper().replace('U','T') + pad_3s[current_pad].seq
-                        good_pad, p_unpaired = check_SL_pad(full_seq,region_unpaired,region_paired_A,region_paired_B,regionA,regionB)
+                        good_pad, p_unpaired = check_struct_bpp(full_seq,region_unpaired,region_paired_A,region_paired_B,regionA,regionB)
                         if not good_pad:
                             break
                     current_pad += 1
@@ -378,7 +378,10 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                     regionA += list(range(pad_5n + len(seq.seq),
                                           pad_5n+len(seq.seq)+pad_3n))
                     regionB = list(range(pad_5n, pad_5n+len(seq.seq)))
-                    this_good, p_unpaired = check_padding(full_seq, regionA, regionB, epsilon_punpaired=epsilon_punpaired,
+
+                    this_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired=regionA,
+                                            regionA=regionA,regionB=regionB,
+                                            epsilon_punpaired=epsilon_punpaired,
                                                           epsilon_interaction=epsilon_interaction, epsilon_avg_punpaired=epsilon_avg_punpaired)
                     if not this_good:
                         any_bad = True
@@ -458,13 +461,13 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                     lines.extend(new_lines)
                 else:
                     new_lines = []
-                uid_good, p_unpaired = check_SL_pad(full_seq,region_unpaired,region_paired_A,region_paired_B,regionA,regionB, epsilon=epsilon,
+                uid_good, p_unpaired = check_struct_bpp(full_seq,region_unpaired,region_paired_A,region_paired_B,regionA,regionB, epsilon=epsilon,
                                                      epsilon_punpaired=epsilon_punpaired, epsilon_avg_punpaired=epsilon_avg_punpaired,
                                                      epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
                                                      lines=lines,
                                                      save_image=f'{save_image_folder}/{name}.png')
             else:
-                uid_good, p_unpaired = check_SL_pad(full_seq,region_unpaired,region_paired_A,region_paired_B,regionA,regionB,
+                uid_good, p_unpaired = check_struct_bpp(full_seq,region_unpaired,region_paired_A,region_paired_B,regionA,regionB,
                                                      epsilon=epsilon, epsilon_punpaired=epsilon_punpaired, epsilon_avg_punpaired=epsilon_avg_punpaired,
                                                      epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,)
         pad_lines.append(new_lines)
@@ -484,7 +487,8 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 # check structures
 ###############################################################################
 
-def check_SL_pad(seq,region_unpaired,region_paired_A,region_paired_B,regionA,regionB,
+def check_struct_bpp(seq,region_unpaired=None,region_paired_A=None,region_paired_B=None,
+                  regionA=None,regionB=None,
                   epsilon=MAXPROB_NONINTERACT,
                   epsilon_punpaired=MINPROB_UNPAIRED, epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                   epsilon_paired=MINPROB_PAIRED, epsilon_avg_paired=MINAVGPROB_PAIRED,
@@ -494,34 +498,27 @@ def check_SL_pad(seq,region_unpaired,region_paired_A,region_paired_B,regionA,reg
                package='eternafold')
     p_unpaired = 1-bpp.sum(axis=0)
 
-    punpaired_check = p_unpaired[region_unpaired]
-    interaction_check = bpp[regionA][:, regionB]
-    paired_check = bpp[region_paired_A,region_paired_B]
-    if ((interaction_check.max() > epsilon) or
-        (punpaired_check.min() < epsilon_punpaired) or
-        (punpaired_check.mean() < epsilon_avg_punpaired) or
-        (paired_check.mean() < epsilon_avg_paired) or
-            (paired_check.min() < epsilon_paired)):
+    bad_struct = False
+    if region_unpaired is not None:
+        punpaired_check = p_unpaired[region_unpaired]
+        bad_struct = bad_struct or (punpaired_check.min() < epsilon_punpaired)
+        bad_struct = bad_struct or (punpaired_check.mean() < epsilon_avg_punpaired)
+
+    if regionA is not None:
+        interaction_check = bpp[regionA][:, regionB]
+        bad_struct = bad_struct or (interaction_check.max() > epsilon) 
+
+    if region_paired_A is not None:
+        paired_check = bpp[region_paired_A,region_paired_B]
+        bad_struct = bad_struct or (paired_check.mean() < epsilon_avg_paired)
+        bad_struct = bad_struct or (paired_check.min() < epsilon_paired)
+
+    if bad_struct:
         return False, p_unpaired
+
     else:
         if save_image is not None:
             plot_bpp(bpp, seq, lines, save_image)
-        return True, p_unpaired
-
-
-def check_padding(seq, regionA, regionB, epsilon_punpaired=MINPROB_UNPAIRED,
-                  epsilon_interaction=MAXPROB_NONINTERACT,
-                  epsilon_avg_punpaired=MINAVGPROB_UNPAIRED):
-    bpp = bpps(seq.upper().replace("T", "U"),
-               package='eternafold')  # ,linear=True)
-    p_unpaired = 1-bpp.sum(axis=0)
-    p_unpaired_region_to_check = p_unpaired[regionA]
-    region_to_check = bpp[regionA][:, regionB]
-    if ((p_unpaired_region_to_check.min() < epsilon_punpaired) or
-            (region_to_check.max() > epsilon_interaction) or
-            (p_unpaired_region_to_check.mean() < epsilon_avg_punpaired)):
-        return False, p_unpaired
-    else:
         return True, p_unpaired
 
 
@@ -609,6 +606,7 @@ format_fasta_for_submission('../examples/example_finished.fasta',
 format_fasta_for_submission('../examples/example_finished.fasta',
                             '../examples/example_finished.txt', file_format='custom_array')
 '''
+
 add_fixed_seq_and_barcode('../examples/example_padded_small.fasta', '../examples/example_finished_small.fasta',
                           save_image_folder='../examples/bpps')
 format_fasta_for_submission('../examples/example_finished_small.fasta',
@@ -617,4 +615,5 @@ format_fasta_for_submission('../examples/example_finished_small.fasta',
                             '../examples/example_finished_small.txt', file_format='custom_array')
 '''
 add_pad('../examples/example_WT_single_double_mut.fasta',
-        '../examples/example_padded.fasta')'''
+        '../examples/example_padded.fasta')
+'''
