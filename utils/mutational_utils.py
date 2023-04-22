@@ -81,6 +81,7 @@ def format_fasta_for_submission(fasta,out_file,file_format='twist'):
             names.append(seq.name)
             seqs.append(str(seq.seq).upper().replace("U","T"))
         df = pd.DataFrame(np.array([names,seqs]).T,columns=["name","sequence"])
+        df.to_csv(out_file,index=False)
 
     elif file_format == 'custom_array':
         if out_file[-4:]!='.txt':
