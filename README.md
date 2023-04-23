@@ -7,7 +7,7 @@ A collection of functionalities for preparing library for RNA structure probing.
 Major functionalities have been scripted in `prepare_library.py`. Please see `python prepare_library.py -h` for details on the options and example runs below. Note these scripted functionalities are a subset of what is possible with the code base. Please submit an issue if you want an additional library preperation method to be added to this main script.
 
 ```
-usage: prepare_library.py [-h] -i INPUT_FASTA -o OUTPUT_PREFIX [--window | --m2seq] [--save_bpp_fig]
+usage: prepare_library.py [-h] -i INPUT_FASTA -o OUTPUT_PREFIX [--window | --m2seq | --just_library] [--save_bpp_fig]
                           [--save_image_folder SAVE_IMAGE_FOLDER] [--Pmax_noninteract PMAX_NONINTERACT] [--Pmin_paired PMIN_PAIRED]
                           [--Pavg_paired PAVG_PAIRED] [--Pmin_unpaired PMIN_UNPAIRED] [--Pavg_unpaired PAVG_UNPAIRED] [--seq5 SEQ5]
                           [--seq3 SEQ3] [--barcode_numbp BARCODE_NUMBP] [--barcode_num5polyA BARCODE_NUM5POLYA]
@@ -25,6 +25,8 @@ programs:
   --window              The window program will take each sequence, create sliding windows and then prepare the library sequences.
   --m2seq               The m2seq program will take each sequence, get all single mutants, create a noninteracting pad to ensure
                         each sequence is the same length if needed, and then prepare the library sequences.
+  --just_library        The just_libary program will take all sequences provided and then just prepare the libary using only those
+                        sequences.
 
 Visuals:
   --save_bpp_fig        Whether to save images of the base-pair-probability matrices.
@@ -62,7 +64,7 @@ window:
   --step STEP           The step size of the sliding window.
   --circularize         Whether to circularize the sequence (at 3' end, don't stop but loop back to 5') or not.
 
-m2seq:
+padding for: m2seq or just_library when length not equal:
   --pad_type PAD_TYPE   If there are sequencees of multiple lengths, to obtain a libarary of equal length some sequences will be
                         padded. This specifies the type of padding with SL_same_per_length (if pad is long enough create a stem-
                         loop, same pad is used for each group of sequences with equal length) or rand_same_all (a single-stranded
