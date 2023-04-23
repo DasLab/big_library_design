@@ -11,23 +11,11 @@ from arnie.bpps import bpps
 ###############################################################################
 # TODO
 ###############################################################################
-# TODO stepwise add 3; add 5'
-# script help
-# all docstrings
-# README with example calls - windows, m2seq, and also a single script for RD
-# check all seq high probs stay high (?)
-# all above MINAVGPROB_PAIRED within 20% of previous?
-# check_padding likely remove
-# magic numbers in pad
 # robustly test various pad lengths
-# probably need code to reduce counts eg random select sequences?
 # general robustness of pad
-# specific mutate rescues
-# visuals/coloring could add mutation site(s)
-# add bpp options, other packages, linear
 # pad, random but share length, all own pad, or directed eg AC*
-# do I need to check the 5 and 3 interaction?
-# maybe need a min edit distance for the uid?
+# can this not be done with bp_len 0
+
 # paralleize idea, run pad search on all single sequences
 # then when all done, come together and find one of those that works
 ###############################################################################
@@ -104,6 +92,12 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
     else:
         print('file_format not supported, available: custom_array twist')
 
+def randomly_select_seqs(fasta, out_file, N):
+    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    if len(seqs)>N:
+        all_seqs = sample(all_seqs,N)
+    SeqIO.write(all_seqs, out_fasta, "fasta")
+
 
 ###############################################################################
 # get desired sequences
@@ -112,6 +106,7 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
 
 def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 circularize=False):
+    print(f'Getting all sliding windows, {window_length}nt every {window_slide}nt.')
     seqs = list(SeqIO.parse(fasta, "fasta"))
     windows = []
     for seq_rec in seqs:
@@ -282,7 +277,8 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
             epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
             loop=TETRALOOP, min_hang=3):
 
-    # rand_same_all SL_same_per_length
+    # crurent options: rand_same_all SL_same_per_length
+
     seqs = list(SeqIO.parse(fasta, "fasta"))
     seq_by_length = {}
     for seq_rec in seqs:
@@ -357,10 +353,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                     current_pad += 1
                     if current_pad == len(pad_5s):
                         print("no pad found")
-                        #print('shuffling pads and trying again')
-                        # shuffle(pad_5s)
-                        # shuffle(pad_3s)
-                        #current_pad = 0
+
                 good5 = pad_5s[current_pad-1].seq
 
                 print("Finding 3' pad")
@@ -396,15 +389,11 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                     current_pad += 1
                     if current_pad == len(pad_3s):
                         print("no pad found")
-                        #print('shuffling pads and trying again')
-                        # shuffle(pad_5s)
-                        # shuffle(pad_3s)
-                        #current_pad = 0
 
                 pads_by_len[len(str(seqs[0].seq))] = [
                     good5, pad_3s[current_pad-1].seq]
 
-        print('found pads, now adding pads')
+        print('Found pads, now adding pads.')
         padded_seqs = []
         for seq_length, seqs in seq_by_length.items():
             pad5, pad3 = pads_by_len[seq_length]
@@ -473,7 +462,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                               epsilon_paired=MINPROB_PAIRED,
                               epsilon_avg_paired=MINAVGPROB_PAIRED,
-                              save_image_folder=None):
+                              save_image_folder=None,save_bpp_fig=True):
     # get and randomly shuffle all potential barcoces
     all_uids = get_all_barcodes(
         num_bp=num_bp, loop=loop, num5hang=num5hang, polyA5=num5polyA)
@@ -482,9 +471,9 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     all_full_seqs = []
     p_unpaireds = {}
     seqs = SeqIO.parse(fasta, "fasta")
-    if save_image_folder is not None:
-        pad_lines = []
-    print("Adding 5', barcode, 3'")
+    pad_lines,new_lines = [], []
+    rejected_uids = []
+    print("Adding 5', barcode, 3'.")
 
     chunk_count, image_count = 0, 0
     for seq_rec in tqdm(list(seqs)):
@@ -506,10 +495,12 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                      len(seq5) + len(seq)+num5hang+num5polyA+(2*num_bp)+len(loop)))[::-1]
 
         uid_good = False
+        seq_count = 0
         while not uid_good:
             uid = all_uids[current_uid].seq
             full_seq = f'{seq5}{seq}{uid}{seq3}'
             current_uid += 1
+            prob_factor = 0.9**(1+(seq_count//10))
             if save_image_folder is not None:
 
                 lines = [len(seq5), len(seq5)+len(seq),
@@ -523,15 +514,30 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                     lines.extend(new_lines)
                 else:
                     new_lines = []
-                uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB, epsilon=epsilon,
-                                                        epsilon_punpaired=epsilon_punpaired, epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
+                if save_bpp_fig:
+                    uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB, epsilon=epsilon/prob_factor,
+                                                        epsilon_punpaired=epsilon_punpaired*prob_factor, epsilon_avg_punpaired=epsilon_avg_punpaired*prob_factor,
+                                                        epsilon_paired=epsilon_paired*prob_factor, epsilon_avg_paired=epsilon_avg_paired*prob_factor,
                                                         lines=lines,
                                                         save_image=f'{save_image_folder}/{name}.png')
+                else:
+                    uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
+                                                        epsilon=epsilon/prob_factor, epsilon_punpaired=epsilon_punpaired*prob_factor, 
+                                                        epsilon_avg_punpaired=epsilon_avg_punpaired*prob_factor,
+                                                        epsilon_paired=epsilon_paired*prob_factor, epsilon_avg_paired=epsilon_avg_paired*prob_factor)
             else:
+                print(uid_good,current_uid)
                 uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
-                                                        epsilon=epsilon, epsilon_punpaired=epsilon_punpaired, epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,)
+                                                        epsilon=epsilon/prob_factor, epsilon_punpaired=epsilon_punpaired*prob_factor, 
+                                                        epsilon_avg_punpaired=epsilon_avg_punpaired*prob_factor,
+                                                        epsilon_paired=epsilon_paired*prob_factor, epsilon_avg_paired=epsilon_avg_paired*prob_factor)
+            if not uid_good:
+                rejected_uids.append(all_uids[current_uid-1])
+                seq_count += 1
+            if current_uid == len(all_uids):
+                all_uids = rejected_uids
+                current_uid = 0
+                rejected_uids = []
         pad_lines.append(new_lines)
         all_full_seqs.append(SeqIO.SeqRecord(Seq.Seq(full_seq), name, '', ''))
         p_unpaireds[name] = p_unpaired
@@ -594,8 +600,8 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
         return False, p_unpaired
 
     else:
-        # if save_image is not None:
-        #    plot_bpp(bpp, seq, lines, save_image)
+        if save_image is not None:
+            plot_bpp(bpp, seq, lines, save_image)
         return True, p_unpaired
 
 
@@ -651,4 +657,4 @@ def plot_punpaired(p_unpaired, seq, lines, pad_lines, save_image):
 
 #add_pad('../examples/example_WT_single_double_mut.fasta','../examples/example_padded.fasta')
 #add_fixed_seq_and_barcode('../examples/example_padded_small.fasta', '../examples/example_finished_small.fasta',save_image_folder='../examples/bpps')
-add_fixed_seq_and_barcode('../examples/example_padded.fasta', '../examples/example_finished.fasta',save_image_folder='../examples/bpps')
+#add_fixed_seq_and_barcode('../examples/example_padded.fasta', '../examples/example_finished.fasta',save_image_folder='../examples/bpps')
