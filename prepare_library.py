@@ -4,6 +4,10 @@ from utils.mutational_utils import *
 # README with example calls - windows, m2seq, and also a single script for RD
 # TODO print in process what is being done
 
+###############################################################################
+# Arguments
+###############################################################################
+
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--input_fasta', type=str, required=True,
                     help='Sequences to make library out of, file in fasta format.')
@@ -16,6 +20,8 @@ programs.add_argument('--window', action='store_true',
                       help='The window program will take each sequence, create sliding windows and then prepare the library sequences.')
 programs.add_argument('--m2seq', action='store_true',
                       help='The m2seq program will take each sequence, get all single mutants, create a noninteracting pad to ensure each sequence is the same length if needed, and then prepare the library sequences.')
+programs.add_argument('--just_library',action='store_true',
+                    help='The just_libary program will take all sequences provided and then just prepare the libary using only those sequences.')
 
 visuals = parser.add_argument_group('Visuals')
 visuals.add_argument('--save_bpp_fig', action='store_true',
@@ -57,12 +63,57 @@ window.add_argument('--step', type=int, default=10,
 window.add_argument('--circularize', action='store_true',
                     help="Whether to circularize the sequence (at 3' end, don't stop but loop back to 5') or not.")
 
-m2seq = parser.add_argument_group('m2seq')
-m2seq.add_argument('--pad_type', type=str, help='')
+m2seq = parser.add_argument_group('padding for: m2seq or just_library when length not equal')
+m2seq.add_argument('--pad_type', type=str, default='SL_same_per_length', help='If there are sequencees of multiple lengths, to obtain a libarary of equal length some sequences will be padded. This specifies the type of padding with SL_same_per_length (if pad is long enough create a stem-loop, same pad is used for each group of sequences with equal length) or rand_same_all (a single-stranded non-interacting pad is choosen, same for all sequences just using the length of pad required to pad each sequence to same length) as options.')
+m2seq.add_argument('--pad_loop',type=str,default='TTCG',help='If padtype is a stem-loop the constant loop to use.')
+m2seq.add_argument('--pad_min_hang',type=int,default=3,help='If padtype is a stem-loop the minimum (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
 
 args = parser.parse_args()
 
-if args.window:
+
+###############################################################################
+# just library
+###############################################################################
+
+if args.just_library:
+    # check pad needed
+    if get_same_length(args.input_fasta):
+        fasta = args.input_fasta
+    else:
+        fasta = f'{args.output_prefix}_pad.fasta'
+        add_pad(args.input_fasta,
+            fasta,
+            padding_type=args.pad_type,
+            epsilon_interaction=args.Pmax_noninteract,
+            epsilon_punpaired=args.Pmin_unpaired,
+            epsilon_avg_punpaired=args.Pavg_unpaired,
+            epsilon_paired=args.Pmin_paired,
+            epsilon_avg_paired=args.Pavg_paired,
+            loop=args.pad_loop,
+            min_hang=args.pad_min_hang)
+    add_fixed_seq_and_barcode(fasta,
+                              f'{args.output_prefix}_library.fasta',
+                              seq5=args.seq5,
+                              seq3=args.seq3,
+                              loop=args.barcode_loop,
+                              num_bp=args.barcode_numbp,
+                              num5hang=args.barcode_num5randomhang,
+                              num5polyA=args.barcode_num5polyA,
+                              epsilon_interaction=args.Pmax_noninteract,
+                              epsilon_punpaired=args.Pmin_unpaired,
+                              epsilon_avg_punpaired=args.Pavg_unpaired,
+                              epsilon_paired=args.Pmin_paired,
+                              epsilon_avg_paired=args.Pavg_paired,
+                              save_image_folder=args.save_image_folder,
+                              save_bpp_fig=args.save_bpp_fig)
+    format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
+    format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
+
+###############################################################################
+# Window
+###############################################################################
+
+elif args.window:
     get_windows(args.input_fasta, args.length, args.step,
                 f'{args.output_prefix}_windowed.fasta',
                 circularize=args.circularize)
@@ -74,7 +125,7 @@ if args.window:
                               num_bp=args.barcode_numbp,
                               num5hang=args.barcode_num5randomhang,
                               num5polyA=args.barcode_num5polyA,
-                              epsilon=args.Pmax_noninteract,
+                              epsilon_interaction=args.Pmax_noninteract,
                               epsilon_punpaired=args.Pmin_unpaired,
                               epsilon_avg_punpaired=args.Pavg_unpaired,
                               epsilon_paired=args.Pmin_paired,
@@ -84,11 +135,38 @@ if args.window:
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
+###############################################################################
+# m2seq
+###############################################################################
+
 elif args.m2seq:
     get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta'], f'{args.output_prefix}_WT_single_mut.fasta')
-    add_pad(f'{args.output_prefix}_WT_single_mut.fasta', f'{args.output_prefix}_WT_single_mut_pad.fasta')
-    add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta', f'{args.output_prefix}_library.fasta')
+    add_pad(f'{args.output_prefix}_WT_single_mut.fasta',
+            f'{args.output_prefix}_WT_single_mut_pad.fasta',
+            padding_type=args.pad_type,
+            epsilon_interaction=args.Pmax_noninteract,
+            epsilon_punpaired=args.Pmin_unpaired,
+            epsilon_avg_punpaired=args.Pavg_unpaired,
+            epsilon_paired=args.Pmin_paired,
+            epsilon_avg_paired=args.Pavg_paired,
+            loop=args.pad_loop,
+            min_hang=args.pad_min_hang)
+    add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
+                              f'{args.output_prefix}_library.fasta',
+                              seq5=args.seq5,
+                              seq3=args.seq3,
+                              loop=args.barcode_loop,
+                              num_bp=args.barcode_numbp,
+                              num5hang=args.barcode_num5randomhang,
+                              num5polyA=args.barcode_num5polyA,
+                              epsilon_interaction=args.Pmax_noninteract,
+                              epsilon_punpaired=args.Pmin_unpaired,
+                              epsilon_avg_punpaired=args.Pavg_unpaired,
+                              epsilon_paired=args.Pmin_paired,
+                              epsilon_avg_paired=args.Pavg_paired,
+                              save_image_folder=args.save_image_folder,
+                              save_bpp_fig=args.save_bpp_fig)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 

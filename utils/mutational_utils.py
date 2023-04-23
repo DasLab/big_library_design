@@ -18,6 +18,8 @@ from arnie.bpps import bpps
 
 # paralleize idea, run pad search on all single sequences
 # then when all done, come together and find one of those that works
+
+# in pad probfactor too?
 ###############################################################################
 
 '''
@@ -98,6 +100,16 @@ def randomly_select_seqs(fasta, out_file, N):
         all_seqs = sample(all_seqs,N)
     SeqIO.write(all_seqs, out_fasta, "fasta")
 
+def get_same_length(fasta):
+    seqs = list(SeqIO.parse(fasta, "fasta"))
+    length = None
+    for seq_rec in seqs:
+        len_seq = len(seq_rec.seq)
+        if length is None:
+            length = len_seq
+        elif length != len_seq:
+            return False
+    return True
 
 ###############################################################################
 # get desired sequences
@@ -145,7 +157,7 @@ def get_all_single_mutants(fasta, out_fasta, bases=BASES):
         for i in range(len(seq)):
             for mut in bases:
                 if mut != seq[i]:
-                    name = f' {record.id}_{i}{seq[i]}>{mut}'
+                    name = f' {record.id}_{i}{seq[i]}-{mut}'
                     new_seq = seq[:i]+mut+seq[i+1:]
                     new_mut = SeqIO.SeqRecord(Seq.Seq(new_seq), name, '', '')
                     all_single_mutants.append(new_mut)
@@ -170,7 +182,7 @@ def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
                     for j in regionB:
                         for mutB in bases:
                             if mutB != seq[j]:
-                                name = f' {record.id}_{i}{seq[i]}>{mutA}_{j}{seq[j]}>{mutB}'
+                                name = f' {record.id}_{i}{seq[i]}-{mutA}_{j}{seq[j]}-{mutB}'
                                 if i < j:
                                     new_seq = seq[:i]+mutA + \
                                         seq[i+1:j]+mutB+seq[j+1:]
@@ -275,6 +287,8 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
             epsilon_punpaired=MINPROB_UNPAIRED,
             epsilon_interaction=MAXPROB_NONINTERACT,
             epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
+                              epsilon_paired=MINPROB_PAIRED,
+                              epsilon_avg_paired=MINAVGPROB_PAIRED,
             loop=TETRALOOP, min_hang=3):
 
     # crurent options: rand_same_all SL_same_per_length
@@ -347,7 +361,10 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                             str(seq.seq).upper().replace('U', 'T')
                         good_pad, p_unpaired = check_struct_bpp(
                             full_seq, region_unpaired, region_paired_A,
-                            region_paired_B, regionA, regionB)
+                            region_paired_B, regionA, regionB,
+                            epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
+                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired)
                         if not good_pad:
                             break
                     current_pad += 1
@@ -383,7 +400,10 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                                 'U', 'T') + pad_3s[current_pad].seq
                         good_pad, p_unpaired = check_struct_bpp(
                             full_seq, region_unpaired, region_paired_A,
-                            region_paired_B, regionA, regionB)
+                            region_paired_B, regionA, regionB,
+                            epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
+                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired)
                         if not good_pad:
                             break
                     current_pad += 1
@@ -427,9 +447,9 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
 
                     this_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired=regionA,
                                                              regionA=regionA, regionB=regionB,
-                                                             epsilon_punpaired=epsilon_punpaired,
-                                                             epsilon_interaction=epsilon_interaction,
-                                                             epsilon_avg_punpaired=epsilon_avg_punpaired)
+                                                             epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
+                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired)
                     if not this_good:
                         any_bad = True
                         break
@@ -457,7 +477,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
 def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               num_bp=8, num5hang=0, num5polyA=4,
                               loop=TETRALOOP,
-                              epsilon=MAXPROB_NONINTERACT,
+                              epsilon_interaction=MAXPROB_NONINTERACT,
                               epsilon_punpaired=MINPROB_UNPAIRED,
                               epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                               epsilon_paired=MINPROB_PAIRED,
@@ -515,22 +535,25 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                 else:
                     new_lines = []
                 if save_bpp_fig:
-                    uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB, epsilon=epsilon/prob_factor,
-                                                        epsilon_punpaired=epsilon_punpaired*prob_factor, epsilon_avg_punpaired=epsilon_avg_punpaired*prob_factor,
-                                                        epsilon_paired=epsilon_paired*prob_factor, epsilon_avg_paired=epsilon_avg_paired*prob_factor,
-                                                        lines=lines,
+                    uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB, 
+                                                        epsilon_interaction=epsilon_interaction,
+                                                        epsilon_punpaired=epsilon_punpaired, epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
+                                                        lines=lines,prob_factor=prob_factor,
                                                         save_image=f'{save_image_folder}/{name}.png')
                 else:
                     uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
-                                                        epsilon=epsilon/prob_factor, epsilon_punpaired=epsilon_punpaired*prob_factor, 
-                                                        epsilon_avg_punpaired=epsilon_avg_punpaired*prob_factor,
-                                                        epsilon_paired=epsilon_paired*prob_factor, epsilon_avg_paired=epsilon_avg_paired*prob_factor)
+                                                        epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
+                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
+                                                        prob_factor=prob_factor)
             else:
                 print(uid_good,current_uid)
                 uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
-                                                        epsilon=epsilon/prob_factor, epsilon_punpaired=epsilon_punpaired*prob_factor, 
-                                                        epsilon_avg_punpaired=epsilon_avg_punpaired*prob_factor,
-                                                        epsilon_paired=epsilon_paired*prob_factor, epsilon_avg_paired=epsilon_avg_paired*prob_factor)
+                                                        epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
+                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
+                                                        prob_factor=prob_factor)
             if not uid_good:
                 rejected_uids.append(all_uids[current_uid-1])
                 seq_count += 1
@@ -569,11 +592,12 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
                      region_paired_B=None,
                      regionA=None, regionB=None,
-                     epsilon=MAXPROB_NONINTERACT,
+                     epsilon_interaction=MAXPROB_NONINTERACT,
                      epsilon_punpaired=MINPROB_UNPAIRED,
                      epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                      epsilon_paired=MINPROB_PAIRED,
                      epsilon_avg_paired=MINAVGPROB_PAIRED,
+                     prob_factor = 1.0,
                      lines=None, save_image=None):
 
     bpp = bpps(seq.upper().replace("T", "U"),
@@ -583,17 +607,17 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
     bad_struct = False
     if region_unpaired is not None:
         punpaired_check = p_unpaired[region_unpaired]
-        bad_struct = bad_struct or (punpaired_check.min() < epsilon_punpaired)
-        bad_struct = bad_struct or (punpaired_check.mean() < epsilon_avg_punpaired)
+        bad_struct = bad_struct or (punpaired_check.min() < epsilon_punpaired*prob_factor)
+        bad_struct = bad_struct or (punpaired_check.mean() < epsilon_avg_punpaired*prob_factor)
 
     if regionA is not None:
         interaction_check = bpp[regionA][:, regionB]
-        bad_struct = bad_struct or (interaction_check.max() > epsilon)
+        bad_struct = bad_struct or (interaction_check.max() > epsilon_interaction/prob_factor)
 
     if region_paired_A is not None and region_paired_A != []:
         paired_check = bpp[region_paired_A, region_paired_B]
-        bad_struct = bad_struct or (paired_check.mean() < epsilon_avg_paired)
-        bad_struct = bad_struct or (paired_check.min() < epsilon_paired)
+        bad_struct = bad_struct or (paired_check.mean() < epsilon_avg_paired*prob_factor)
+        bad_struct = bad_struct or (paired_check.min() < epsilon_paired*prob_factor)
 
     # print(interaction_check.max(),punpaired_check.min())#paired_check.min(),
     if bad_struct:
