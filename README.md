@@ -10,6 +10,7 @@ Major functionalities have been scripted in `prepare_library.py`. Please see `py
 usage: prepare_library.py [-h] -i INPUT_FASTA -o OUTPUT_PREFIX
                           [--just_library | --window | --m2seq | --m2seq_with_double]
                           [--save_bpp_fig SAVE_BPP_FIG] [--save_image_folder SAVE_IMAGE_FOLDER]
+                          [--max_seq_punpaired_plot MAX_SEQ_PUNPAIRED_PLOT]
                           [--Pmax_noninteract PMAX_NONINTERACT] [--Pmin_paired PMIN_PAIRED]
                           [--Pavg_paired PAVG_PAIRED] [--Pmin_unpaired PMIN_UNPAIRED]
                           [--Pavg_unpaired PAVG_UNPAIRED] [--seq5 SEQ5] [--seq3 SEQ3]
@@ -18,7 +19,8 @@ usage: prepare_library.py [-h] -i INPUT_FASTA -o OUTPUT_PREFIX
                           [--barcode_num5randomhang BARCODE_NUM5RANDOMHANG]
                           [--barcode_loop BARCODE_LOOP] [--length LENGTH] [--step STEP]
                           [--circularize] [--pad_type PAD_TYPE] [--pad_loop PAD_LOOP]
-                          [--pad_min_hang PAD_MIN_HANG] [--doublemut DOUBLEMUT [DOUBLEMUT ...]]
+                          [--pad_min_hang PAD_MIN_HANG] [--pad_num_samples PAD_NUM_SAMPLES]
+                          [--doublemut DOUBLEMUT [DOUBLEMUT ...]]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -45,6 +47,10 @@ Visuals:
   --save_image_folder SAVE_IMAGE_FOLDER
                         Folder to save images (proabbility unpaired and if specified base-pair-
                         probability matrices), default don't save.
+  --max_seq_punpaired_plot MAX_SEQ_PUNPAIRED_PLOT
+                        The maximum number of sequences to put in one probability unpaired plot,
+                        will split into seperate images if smaller than total number of
+                        sequences.
 
 Strctural checks:
   --Pmax_noninteract PMAX_NONINTERACT
@@ -91,6 +97,8 @@ padding for: m2seq or just_library when length not equal:
   --pad_min_hang PAD_MIN_HANG
                         If padtype is a stem-loop the minimum (only +1 possible) to have a
                         random, single-stranded hang between sequence of interest and pad.
+  --pad_num_samples PAD_NUM_SAMPLES
+                        Minimum number of sequences to check pad's effect on structure.
 
 double mutant:
   --doublemut DOUBLEMUT [DOUBLEMUT ...]
@@ -101,7 +109,6 @@ double mutant:
                         than one sequence is in the input need to specify the same number of
                         regions seperated by space eg for 2 sequences: 1-12,15.64-70,72-78
                         34-78.80-85
-
 ```
 
 ### Creating library from already prepared sequence list
