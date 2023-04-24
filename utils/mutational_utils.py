@@ -274,8 +274,12 @@ def _get_all_rand_seq(length, bases=BASES):
 
 
 def _get_5_3_split(length):
-    # 4+6+6+4 20
-    if length < 20:
+    # 4+6+4+6 20
+    if length < 15 and length % 2 == 0:
+        pad_5_len, pad_3_len = length//2, length//2
+    elif length <15:
+        pad_5_len, pad_3_len = length//2, 1+(length//2)
+    elif length < 20:
         pad_5_len, pad_3_len = 0, length
     elif length < 32:
         pad_5_len, pad_3_len = length-20, 20
