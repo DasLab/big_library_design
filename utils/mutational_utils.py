@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from itertools import product, chain
-from random import shuffle, sample, choices
+from random import shuffle, sample, choices, random
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from Bio import SeqIO, Seq
@@ -15,11 +15,12 @@ from arnie.bpps import bpps
 # general robustness of pad
 # pad, random but share length, all own pad, or directed eg AC*
 # can this not be done with bp_len 0
+# in pad probfactor too?
 
 # paralleize idea, run pad search on all single sequences
 # then when all done, come together and find one of those that works
 
-# in pad probfactor too?
+# unclear/test behaviour of double mutant in overlap eg 1-12.1-12
 ###############################################################################
 
 '''
@@ -66,12 +67,13 @@ def combine_fastas(fastas, out_fasta):
     all_seqs = []
     for fasta in fastas:
         all_seqs.extend(list(SeqIO.parse(fasta, "fasta")))
+    print(f'Combined and saved {fastas} to {out_fasta}')
     SeqIO.write(all_seqs, out_fasta, "fasta")
 
 
 def format_fasta_for_submission(fasta, out_file, file_format='twist'):
 
-    if file_format == 'twist':
+    if file_format == 'twist' or file_format=='agilent':
         if out_file[-4:] != '.csv':
             print('twist requires .csv files, change out_file')
         names = []
@@ -82,6 +84,7 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
         df = pd.DataFrame(np.array([names, seqs]).T,
                           columns=["name", "sequence"])
         df.to_csv(out_file, index=False)
+        print(f'Written {out_file} for submission to twist or agilent.')
 
     elif file_format == 'custom_array':
         if out_file[-4:] != '.txt':
@@ -90,6 +93,8 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
             for seq in SeqIO.parse(fasta, "fasta"):
                 f.write(str(seq.seq).upper().replace("U", "T"))
                 f.write('\n')
+            print(f'Written {out_file} for submission to custom_array.')
+
 
     else:
         print('file_format not supported, available: custom_array twist')
@@ -144,10 +149,12 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
             windows.append(new_rec)
     if out_fasta is not None:
         SeqIO.write(windows, out_fasta, "fasta")
+        print(f'Saved windows to {out_fasta}.')
     return windows
 
 
 def get_all_single_mutants(fasta, out_fasta, bases=BASES):
+    print("Getting all single mutants.")
     all_WT = SeqIO.parse(fasta, "fasta")
     all_single_mutants = []
     for record in all_WT:
@@ -163,10 +170,34 @@ def get_all_single_mutants(fasta, out_fasta, bases=BASES):
                     all_single_mutants.append(new_mut)
 
     SeqIO.write(all_single_mutants, out_fasta, "fasta")
+    print(f'Saved single mutants to {out_fasta}.')
+
+def get_regions_for_doublemut(doublemuts):
+    regionAs, regionBs = [],[]
+    for mutstr in doublemuts:
+        strA, strB = mutstr.split('.')
+        regionA = []
+        for nucrange in strA.split(','):
+            nucrange = [int(x) for x in nucrange.split('-')]
+            if len(nucrange)==2:
+                regionA.extend(list(range(nucrange[0],nucrange[1]+1)))
+            else:
+                regionA.extend(nucrange)
+        regionAs.append(regionA)
+        regionB = []
+        for nucrange in strB.split(','):
+            nucrange = [int(x) for x in nucrange.split('-')]
+            if len(nucrange)==2:
+                regionB.extend(list(range(nucrange[0],nucrange[1]+1)))
+            else:
+                regionB.extend(nucrange)
+        regionBs.append(regionB)
+    return regionAs,regionBs
 
 
 def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
     # 9 per pair * lenregionA * lenregionB
+    print("Getting all double mutants.")
 
     all_WT = list(SeqIO.parse(fasta, "fasta"))
     all_double_mutants = []  # unlike single mutant, WT not saved
@@ -193,6 +224,7 @@ def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
                                     Seq.Seq(new_seq), name, '', '')
                                 all_double_mutants.append(new_mut)
     SeqIO.write(all_double_mutants, out_fasta, "fasta")
+    print(f'Saved all double mutants between the 2 regions to {out_fasta}.')
 
 
 ###############################################################################
@@ -204,6 +236,7 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
                      loop=TETRALOOP, bases=BASES):
     # probably should add ability to randomly generate but this
     # is fast enough for these small barcode
+    print("Getting all possible barcodes.")
     all_barcodes = []
     for x in product(bases, repeat=num_bp+num5hang+num3hang):
         uid = ''.join(x)
@@ -227,6 +260,7 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
         all_barcodes.append(seq_rec)
     if out_fasta is not None:
         SeqIO.write(all_barcodes, out_fasta, "fasta")
+        print(f'Saved all barcodes to {out_fasta}.')
     return all_barcodes
 
 
@@ -289,7 +323,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
             epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                               epsilon_paired=MINPROB_PAIRED,
                               epsilon_avg_paired=MINAVGPROB_PAIRED,
-            loop=TETRALOOP, min_hang=3):
+            loop=TETRALOOP, min_hang=3,min_num_samples=30):
 
     # crurent options: rand_same_all SL_same_per_length
 
@@ -305,7 +339,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
     # for each len randomly select 1% of sequences or 10
     selected_sec = []
     for len_seq, seq_group in seq_by_length.items():
-        number_to_select = min(len(seq_group), max(10, len(seq_group)*0.01))
+        number_to_select = min(len(seq_group), max(min_num_samples, len(seq_group)*0.01))
         selected_sec.append(sample(seq_group, k=number_to_select))
 
     # get length of pad needed
@@ -332,7 +366,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                 # numbp_loop_numbp_hang_seq_hang_numbp_loop_numbp
                 part_lengths = [num_bp5, loop_len5, num_bp5, num_hang5, len(
                     str(seqs[0].seq)), num_hang3, num_bp3, loop_len3, num_bp3]
-                print("Finding 5' pad")
+                print("Searching for 5' pad")
                 region_unpaired = list(
                     range(sum(part_lengths[:1]), sum(part_lengths[:2])))
                 region_unpaired.extend(
@@ -373,7 +407,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
 
                 good5 = pad_5s[current_pad-1].seq
 
-                print("Finding 3' pad")
+                print("Searching for 3' pad")
                 region_unpaired = list(
                     range(sum(part_lengths[:5]), sum(part_lengths[:6])))
                 region_unpaired.extend(
@@ -471,8 +505,19 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
 
     if out_fasta is not None:
         SeqIO.write(padded_seqs, out_fasta, "fasta")
+        print(f'Saved all padded sequences to {out_fasta}.')
     return padded_seqs
 
+
+def get_mutations_from_name(name):
+    nucs = []
+    for name_part in name.split('_'):
+        if name_part[-2]=='-':
+            nucnum_A,nuc_B = name_part.split('-')
+            num,nuc_A = nucnum_A[:-1],nucnum_A[-1]
+            if nuc_A in BASES and nuc_B in BASES:
+                nucs.append(int(num))
+    return nucs
 
 def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               num_bp=8, num5hang=0, num5polyA=4,
@@ -482,7 +527,8 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                               epsilon_paired=MINPROB_PAIRED,
                               epsilon_avg_paired=MINAVGPROB_PAIRED,
-                              save_image_folder=None,save_bpp_fig=True):
+                              save_image_folder=None,save_bpp_fig=0):
+
     # get and randomly shuffle all potential barcoces
     all_uids = get_all_barcodes(
         num_bp=num_bp, loop=loop, num5hang=num5hang, polyA5=num5polyA)
@@ -491,7 +537,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     all_full_seqs = []
     p_unpaireds = {}
     seqs = SeqIO.parse(fasta, "fasta")
-    pad_lines,new_lines = [], []
+    pad_lines,new_lines,seqs_for_labeling,muts = [], [], [], []
     rejected_uids = []
     print("Adding 5', barcode, 3'.")
 
@@ -515,26 +561,30 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                      len(seq5) + len(seq)+num5hang+num5polyA+(2*num_bp)+len(loop)))[::-1]
 
         uid_good = False
+        mutations = get_mutations_from_name(seq_rec.name)
+        
         seq_count = 0
+        lines = [len(seq5), len(seq5)+len(seq),
+                         len(seq5)+len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)]
+        if 'pad' in name:
+            name.split('pad')
+            pad5_length = int(name.split('pad')[0].split("_")[-1])
+            pad3_length = int(name.split('pad')[1].split("_")[0])
+            new_lines = [len(seq5)+pad5_length,
+                         len(seq5)+len(seq)-pad3_length]
+            lines.extend(new_lines)
+        else:
+            new_lines = []
         while not uid_good:
             uid = all_uids[current_uid].seq
             full_seq = f'{seq5}{seq}{uid}{seq3}'
             current_uid += 1
-            prob_factor = 0.9**(1+(seq_count//10))
+            prob_factor = 0.9**(1+(seq_count//100))
+
             if save_image_folder is not None:
 
-                lines = [len(seq5), len(seq5)+len(seq),
-                         len(seq5)+len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)]
-                if 'pad' in name:
-                    name.split('pad')
-                    pad5_length = int(name.split('pad')[0].split("_")[-1])
-                    pad3_length = int(name.split('pad')[1].split("_")[0])
-                    new_lines = [len(seq5)+pad5_length,
-                                 len(seq5)+len(seq)-pad3_length]
-                    lines.extend(new_lines)
-                else:
-                    new_lines = []
-                if save_bpp_fig:
+                
+                if random()<save_bpp_fig:
                     uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB, 
                                                         epsilon_interaction=epsilon_interaction,
                                                         epsilon_punpaired=epsilon_punpaired, epsilon_avg_punpaired=epsilon_avg_punpaired,
@@ -548,7 +598,6 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                                         epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
                                                         prob_factor=prob_factor)
             else:
-                print(uid_good,current_uid)
                 uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
                                                         epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
                                                         epsilon_avg_punpaired=epsilon_avg_punpaired,
@@ -561,24 +610,34 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                 all_uids = rejected_uids
                 current_uid = 0
                 rejected_uids = []
+
+        mutations = [x+len(seq5)+pad5_length for x in mutations]
+        muts.append(mutations)
         pad_lines.append(new_lines)
+        seqs_for_labeling.append(full_seq)
         all_full_seqs.append(SeqIO.SeqRecord(Seq.Seq(full_seq), name, '', ''))
         p_unpaireds[name] = p_unpaired
         if save_image_folder is not None and chunk_count == 500:
             plot_punpaired(p_unpaireds,
-                           f'{seq5}{" "*len(seq)}{" "*len(uid)}{seq3}',
+                            [i if i%10==0 else '' for i in range(len(seqs_for_labeling[0]))],
+                            seqs_for_labeling,muts,
+                           #f'{seq5}{" "*len(seq)}{" "*len(uid)}{seq3}',
                            [len(seq5), len(seq5)+len(seq), len(seq5) +
                             len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)], pad_lines,
                            f'{save_image_folder}/all_p_unpaired{image_count}.png')
+
             chunk_count = 0
             image_count += 1
             p_unpaireds = {}
-            pad_lines = []
+            pad_lines,seqs_for_labeling,muts = [],[],[]
     if out_fasta is not None:
         SeqIO.write(all_full_seqs, out_fasta, "fasta")
+        print(f'Saved all full sequences to {out_fasta}.')
     if save_image_folder is not None and len(p_unpaired) != 0:
         plot_punpaired(p_unpaireds,
-                       f'{seq5}{" "*len(seq)}{" "*len(uid)}{seq3}',
+                       [i if i%10==0 else '' for i in range(len(seqs_for_labeling[0]))],
+                            seqs_for_labeling,muts,
+                           #f'{seq5}{" "*len(seq)}{" "*len(uid)}{seq3}',
                        [len(seq5), len(seq5)+len(seq), len(seq5) +
                         len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)], pad_lines,
                        f'{save_image_folder}/all_p_unpaired.png')
@@ -656,13 +715,20 @@ def plot_bpp(bpp, seq, lines, save_image):
     plt.close()
 
 
-def plot_punpaired(p_unpaired, seq, lines, pad_lines, save_image):
-    plt.figure(figsize=(len(seq)*0.3, len(p_unpaired)*0.3))
+def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image):
+    plt.figure(figsize=(len(seqs[0])*0.3, len(p_unpaired)*0.3))
     df = pd.DataFrame(p_unpaired).T
     plt.imshow(df, cmap='gist_heat_r')
-    plt.yticks(range(len(df)), df.index, size=8)
-    plt.xticks(range(len(seq)), seq, size=8)
     ax = plt.gca()
+    for i,(seq,mut) in enumerate(zip(seqs,muts)):
+        for j,nuc in enumerate(seq):
+            if j in mut:
+                text = ax.text(j, i, nuc,ha="center", va="center", color="magenta")
+            else:
+                text = ax.text(j, i, nuc,ha="center", va="center", color="gray")
+    plt.yticks(range(len(df)), df.index, size=8)
+
+    plt.xticks(range(len(xlabels)), xlabels, size=8)
     y1, y2 = ax.get_ylim()
     for line in lines:
         plt.vlines(line-0.5, y1+1, y2-1, color="cyan", linewidth=8)
@@ -674,11 +740,29 @@ def plot_punpaired(p_unpaired, seq, lines, pad_lines, save_image):
     ax.spines['right'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
     ax.spines['left'].set_visible(False)
+    ax.set_ylim((y1,y2))
     ax.tick_params(axis='both', which='both', length=0)
     plt.savefig(save_image, bbox_inches='tight', dpi=100)
     plt.close()
 
+def plot_punpaired_from_fasta(fasta,save_image):
+    seqs = list(SeqIO.parse(fasta, "fasta"))
+    p_unpaireds = {}
+    seqs_list = []
+    muts = []
+    for seq_rec in seqs:
+        seq = str(seq_rec.seq).upper().replace("T", "U")
+        bpp = bpps(seq,
+                   package='eternafold')
+        p_unpaired = 1-bpp.sum(axis=0)
+        p_unpaireds[seq_rec.name] = p_unpaired
+        seqs_list.append(seq)
+        muts.append([5,15])
+    labels = []
+    for i in range(len(seqs[0])):
+        if i%10==0:
+            labels.append(i)
+        else:
+            labels.append('')
 
-#add_pad('../examples/example_WT_single_double_mut.fasta','../examples/example_padded.fasta')
-#add_fixed_seq_and_barcode('../examples/example_padded_small.fasta', '../examples/example_finished_small.fasta',save_image_folder='../examples/bpps')
-#add_fixed_seq_and_barcode('../examples/example_padded.fasta', '../examples/example_finished.fasta',save_image_folder='../examples/bpps')
+    plot_punpaired(p_unpaireds, labels, seqs, muts, [], [], save_image)

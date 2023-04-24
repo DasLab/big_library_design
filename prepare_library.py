@@ -1,9 +1,6 @@
 import argparse
 from utils.mutational_utils import *
 
-# README with example calls - windows, m2seq, and also a single script for RD
-# TODO print in process what is being done
-
 ###############################################################################
 # Arguments
 ###############################################################################
@@ -16,16 +13,18 @@ parser.add_argument('-o', '--output_prefix', type=str,
 
 programs_ = parser.add_argument_group('programs')
 programs = programs_.add_mutually_exclusive_group()
+programs.add_argument('--just_library',action='store_true',
+                    help='The just_libary program will take all sequences provided and then just prepare the libary using only those sequences.')
 programs.add_argument('--window', action='store_true',
                       help='The window program will take each sequence, create sliding windows and then prepare the library sequences.')
 programs.add_argument('--m2seq', action='store_true',
                       help='The m2seq program will take each sequence, get all single mutants, create a noninteracting pad to ensure each sequence is the same length if needed, and then prepare the library sequences.')
-programs.add_argument('--just_library',action='store_true',
-                    help='The just_libary program will take all sequences provided and then just prepare the libary using only those sequences.')
+programs.add_argument('--m2seq_with_double', action='store_true',
+                      help='The program runs the m2seq program with the addition of double mutants in user defined regions.')
 
 visuals = parser.add_argument_group('Visuals')
-visuals.add_argument('--save_bpp_fig', action='store_true',
-                     help='Whether to save images of the base-pair-probability matrices.')
+visuals.add_argument('--save_bpp_fig', type=float, default=0,
+                     help='Proportion to save images of the base-pair-probability matrices. 0 is none, 1 is all, in between is random seleciton of sequences.')
 visuals.add_argument('--save_image_folder', default=None,
                      help="Folder to save images (proabbility unpaired and if specified base-pair-probability matrices), default don't save.")
 
@@ -67,6 +66,10 @@ m2seq = parser.add_argument_group('padding for: m2seq or just_library when lengt
 m2seq.add_argument('--pad_type', type=str, default='SL_same_per_length', help='If there are sequencees of multiple lengths, to obtain a libarary of equal length some sequences will be padded. This specifies the type of padding with SL_same_per_length (if pad is long enough create a stem-loop, same pad is used for each group of sequences with equal length) or rand_same_all (a single-stranded non-interacting pad is choosen, same for all sequences just using the length of pad required to pad each sequence to same length) as options.')
 m2seq.add_argument('--pad_loop',type=str,default='TTCG',help='If padtype is a stem-loop the constant loop to use.')
 m2seq.add_argument('--pad_min_hang',type=int,default=3,help='If padtype is a stem-loop the minimum (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
+m2seq.add_argument('--pad_num_samples',type=int,default=30,help="Minimum number of sequences to check pad's effect on structure.")
+
+double = parser.add_argument_group('double mutant')
+double.add_argument('--doublemut',nargs='+',help='Two region to do double mutagenis of (one mutant in group A one in group B) format: 1-12,15.64-70,72-78 where this would mean one mutant in nucletoides 1to 12 (inclusive) or 15 and one mutant in region 64 to 70 or 72 to 78. 1-12.1-12 would mean all double mutants in 1to 12. If more than one sequence is in the input need to specify the same number of regions seperated by space eg for 2 sequences: 1-12,15.64-70,72-78 34-78.80-85 ')
 
 args = parser.parse_args()
 
@@ -90,7 +93,8 @@ if args.just_library:
             epsilon_paired=args.Pmin_paired,
             epsilon_avg_paired=args.Pavg_paired,
             loop=args.pad_loop,
-            min_hang=args.pad_min_hang)
+            min_hang=args.pad_min_hang,
+            min_num_samples=args.pad_num_samples)
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
@@ -151,7 +155,8 @@ elif args.m2seq:
             epsilon_paired=args.Pmin_paired,
             epsilon_avg_paired=args.Pavg_paired,
             loop=args.pad_loop,
-            min_hang=args.pad_min_hang)
+            min_hang=args.pad_min_hang,
+            min_num_samples=args.pad_num_samples)
     add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
@@ -170,37 +175,45 @@ elif args.m2seq:
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
+###############################################################################
+# m2seq_with_double
+###############################################################################
+
+elif args.m2seq_with_double:
+    get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
+    regionAs, regionBs = get_regions_for_doublemut(args.doublemut)
+    get_all_double_mutants(args.input_fasta, f'{args.output_prefix}_double_mut.fasta',regionAs, regionBs)
+    combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta',f'{args.output_prefix}_double_mut.fasta'], 
+        f'{args.output_prefix}_WT_single_mut.fasta')
+    add_pad(f'{args.output_prefix}_WT_single_mut.fasta',
+            f'{args.output_prefix}_WT_single_mut_pad.fasta',
+            padding_type=args.pad_type,
+            epsilon_interaction=args.Pmax_noninteract,
+            epsilon_punpaired=args.Pmin_unpaired,
+            epsilon_avg_punpaired=args.Pavg_unpaired,
+            epsilon_paired=args.Pmin_paired,
+            epsilon_avg_paired=args.Pavg_paired,
+            loop=args.pad_loop,
+            min_hang=args.pad_min_hang,
+            min_num_samples=args.pad_num_samples)
+    add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
+                              f'{args.output_prefix}_library.fasta',
+                              seq5=args.seq5,
+                              seq3=args.seq3,
+                              loop=args.barcode_loop,
+                              num_bp=args.barcode_numbp,
+                              num5hang=args.barcode_num5randomhang,
+                              num5polyA=args.barcode_num5polyA,
+                              epsilon_interaction=args.Pmax_noninteract,
+                              epsilon_punpaired=args.Pmin_unpaired,
+                              epsilon_avg_punpaired=args.Pavg_unpaired,
+                              epsilon_paired=args.Pmin_paired,
+                              epsilon_avg_paired=args.Pavg_paired,
+                              save_image_folder=args.save_image_folder,
+                              save_bpp_fig=args.save_bpp_fig)
+    format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
+    format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
+
+
 else:
     print('ERROR program not yet implemented')
-
-
-'''
-get_all_single_mutants('../examples/example_WT.fasta',
-                       '../examples/example_single_mut.fasta')
-get_all_double_mutants('../examples/example_WT.fasta',
-                       '../examples/example_double_mut.fasta', [[3, 4], [9, 103], [50, 51, 60, 62]], [[10, 11, 12], [30, 31], [120]])
-combine_fastas(['../examples/example_WT.fasta', '../examples/example_single_mut.fasta',
-                '../examples/example_double_mut.fasta'], '../examples/example_WT_single_double_mut.fasta')
-
-
-add_pad('../examples/example_WT_single_double_mut.fasta',
-        '../examples/example_padded.fasta')
-
-add_fixed_seq_and_barcode('../examples/example_padded.fasta', '../examples/example_finished.fasta',
-                          save_image_folder='../examples/bpps')
-format_fasta_for_submission('../examples/example_finished.fasta',
-                            '../examples/example_finished.csv', file_format='twist')
-format_fasta_for_submission('../examples/example_finished.fasta',
-                            '../examples/example_finished.txt', file_format='custom_array')
-'''
-
-# add_fixed_seq_and_barcode('../examples/example_padded_small.fasta', '../examples/example_finished_small.fasta',
-#                          save_image_folder='../examples/bpps')
-# format_fasta_for_submission('../examples/example_finished_small.fasta',
-#                            '../examples/example_finished_small.csv', file_format='twist')
-# format_fasta_for_submission('../examples/example_finished_small.fasta',
-#                            '../examples/example_finished_small.txt', file_format='custom_array')
-'''
-add_pad('../examples/example_WT_single_double_mut.fasta',
-        '../examples/example_padded.fasta')
-'''
