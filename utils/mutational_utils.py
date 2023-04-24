@@ -22,6 +22,9 @@ from arnie.utils import convert_dotbracket_to_bp_list
 # then when all done, come together and find one of those that works
 
 # unclear/test behaviour of double mutant in overlap eg 1-12.1-12
+
+# make image folder if none exists, 
+# print reduce barcode
 ###############################################################################
 
 '''
@@ -95,8 +98,6 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
                 f.write(str(seq.seq).upper().replace("U", "T"))
                 f.write('\n')
             print(f'Written {out_file} for submission to custom_array.')
-
-
     else:
         print('file_format not supported, available: custom_array twist')
 
@@ -624,7 +625,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     for seq_rec in tqdm(list(seqs)):
         chunk_count += 1
         seq = str(seq_rec.seq).upper().replace("U", "T")
-        name = seq_rec.name+'_w53barcode'
+        name = seq_rec.name+'_libraryready'
 
         # 5_seq_num5polyA_num5hang_numbp_loop_numbp_3
         regionA = list(range(len(seq5), len(seq5)+len(seq)))
