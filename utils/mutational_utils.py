@@ -341,7 +341,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
     for len_seq, seq_group in seq_by_length.items():
         number_to_select = min(len(seq_group), max(min_num_samples, len(seq_group)*0.01))
         selected_sec.append(sample(seq_group, k=number_to_select))
-
+        print(f'Pad for length {len_seq} search using {number_to_select} sequences for structure check for each length.')
     # get length of pad needed
     desired_len = max(seq_by_length.keys())
 
@@ -384,28 +384,32 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                     range(sum(part_lengths[:4]), sum(part_lengths[:5])))
 
                 # loop through to find 5' that works
-                good_pad = False
-                current_pad = 0
-                while not good_pad:
+                if pad_5n == 0:
+                    good5 = ''
+                else:
+                    good_pad = False
+                    current_pad = 0
+                    while not good_pad:
 
-                    for i, seq in enumerate(seqs):
-                        if i % 5 == 0 and i != 0:
-                            print(i)
-                        full_seq = pad_5s[current_pad].seq + \
-                            str(seq.seq).upper().replace('U', 'T')
-                        good_pad, p_unpaired = check_struct_bpp(
-                            full_seq, region_unpaired, region_paired_A,
-                            region_paired_B, regionA, regionB,
-                            epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
-                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired)
-                        if not good_pad:
-                            break
-                    current_pad += 1
-                    if current_pad == len(pad_5s):
-                        print("no pad found")
+                        for i, seq in enumerate(seqs):
+                            if i % 5 == 0 and i != 0:
+                                print(i)
+                            full_seq = pad_5s[current_pad].seq + \
+                                str(seq.seq).upper().replace('U', 'T')
+                            print(region_unpaired,pad_5n,pad_3n)
+                            good_pad, p_unpaired = check_struct_bpp(
+                                full_seq, region_unpaired, region_paired_A,
+                                region_paired_B, regionA, regionB,
+                                epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
+                                                            epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                            epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired)
+                            if not good_pad:
+                                break
+                        current_pad += 1
+                        if current_pad == len(pad_5s):
+                            print("no pad found")
 
-                good5 = pad_5s[current_pad-1].seq
+                    good5 = pad_5s[current_pad-1].seq
 
                 print("Searching for 3' pad")
                 region_unpaired = list(
@@ -420,32 +424,35 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                     range(sum(part_lengths[:5]), sum(part_lengths[:9])))
 
                 # loop through to find 3' that works
+                if pad_3n == 0:
+                    pads_by_len[len(str(seqs[0].seq))] = [
+                        good5, '']
+                else:
+                    good_pad = False
+                    current_pad = 0
+                    while not good_pad:
 
-                good_pad = False
-                current_pad = 0
-                while not good_pad:
+                        for i, seq in enumerate(seqs):
+                            if i % 50 == 0 and i != 0:
+                                print("b",i)
 
-                    for i, seq in enumerate(seqs):
-                        if i % 5 == 0 and i != 0:
-                            print("b",i)
+                            full_seq = good5 + \
+                                str(seq.seq).upper().replace(
+                                    'U', 'T') + pad_3s[current_pad].seq
+                            good_pad, p_unpaired = check_struct_bpp(
+                                full_seq, region_unpaired, region_paired_A,
+                                region_paired_B, regionA, regionB,
+                                epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
+                                                            epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                            epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired)
+                            if not good_pad:
+                                break
+                        current_pad += 1
+                        if current_pad == len(pad_3s):
+                            print("no pad found")
 
-                        full_seq = good5 + \
-                            str(seq.seq).upper().replace(
-                                'U', 'T') + pad_3s[current_pad].seq
-                        good_pad, p_unpaired = check_struct_bpp(
-                            full_seq, region_unpaired, region_paired_A,
-                            region_paired_B, regionA, regionB,
-                            epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired, 
-                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired)
-                        if not good_pad:
-                            break
-                    current_pad += 1
-                    if current_pad == len(pad_3s):
-                        print("no pad found")
-
-                pads_by_len[len(str(seqs[0].seq))] = [
-                    good5, pad_3s[current_pad-1].seq]
+                    pads_by_len[len(str(seqs[0].seq))] = [
+                        good5, pad_3s[current_pad-1].seq]
 
         print('Found pads, now adding pads.')
         padded_seqs = []
@@ -512,11 +519,12 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
 def get_mutations_from_name(name):
     nucs = []
     for name_part in name.split('_'):
-        if name_part[-2]=='-':
-            nucnum_A,nuc_B = name_part.split('-')
-            num,nuc_A = nucnum_A[:-1],nucnum_A[-1]
-            if nuc_A in BASES and nuc_B in BASES:
-                nucs.append(int(num))
+        if len(name_part)>2:
+            if name_part[-2]=='-':
+                nucnum_A,nuc_B = name_part.split('-')
+                num,nuc_A = nucnum_A[:-1],nucnum_A[-1]
+                if nuc_A in BASES and nuc_B in BASES:
+                    nucs.append(int(num))
     return nucs
 
 def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
@@ -527,7 +535,8 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                               epsilon_paired=MINPROB_PAIRED,
                               epsilon_avg_paired=MINAVGPROB_PAIRED,
-                              save_image_folder=None,save_bpp_fig=0):
+                              save_image_folder=None,save_bpp_fig=0,
+                              punpaired_chunk_size=500):
 
     # get and randomly shuffle all potential barcoces
     all_uids = get_all_barcodes(
@@ -617,7 +626,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         seqs_for_labeling.append(full_seq)
         all_full_seqs.append(SeqIO.SeqRecord(Seq.Seq(full_seq), name, '', ''))
         p_unpaireds[name] = p_unpaired
-        if save_image_folder is not None and chunk_count == 500:
+        if save_image_folder is not None and chunk_count == punpaired_chunk_size:
             plot_punpaired(p_unpaireds,
                             [i if i%10==0 else '' for i in range(len(seqs_for_labeling[0]))],
                             seqs_for_labeling,muts,
@@ -723,7 +732,7 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image
     for i,(seq,mut) in enumerate(zip(seqs,muts)):
         for j,nuc in enumerate(seq):
             if j in mut:
-                text = ax.text(j, i, nuc,ha="center", va="center", color="magenta")
+                text = ax.text(j, i, nuc,ha="center", va="center", color="cyan")
             else:
                 text = ax.text(j, i, nuc,ha="center", va="center", color="gray")
     plt.yticks(range(len(df)), df.index, size=8)

@@ -27,6 +27,7 @@ visuals.add_argument('--save_bpp_fig', type=float, default=0,
                      help='Proportion to save images of the base-pair-probability matrices. 0 is none, 1 is all, in between is random seleciton of sequences.')
 visuals.add_argument('--save_image_folder', default=None,
                      help="Folder to save images (proabbility unpaired and if specified base-pair-probability matrices), default don't save.")
+visuals.add_argument('--max_seq_punpaired_plot', type=int, default=500, help='The maximum number of sequences to put in one probability unpaired plot, will split into seperate images if smaller than total number of sequences.')
 
 struct = parser.add_argument_group('Strctural checks')
 struct.add_argument('--Pmax_noninteract', type=float, default=0.05,
@@ -109,7 +110,8 @@ if args.just_library:
                               epsilon_paired=args.Pmin_paired,
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
-                              save_bpp_fig=args.save_bpp_fig)
+                              save_bpp_fig=args.save_bpp_fig,
+                              punpaired_chunk_size=args.max_seq_punpaired_plot)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -135,7 +137,8 @@ elif args.window:
                               epsilon_paired=args.Pmin_paired,
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
-                              save_bpp_fig=args.save_bpp_fig)
+                              save_bpp_fig=args.save_bpp_fig,
+                              punpaired_chunk_size=args.max_seq_punpaired_plot)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -171,7 +174,8 @@ elif args.m2seq:
                               epsilon_paired=args.Pmin_paired,
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
-                              save_bpp_fig=args.save_bpp_fig)
+                              save_bpp_fig=args.save_bpp_fig,
+                              punpaired_chunk_size=args.max_seq_punpaired_plot)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -210,7 +214,8 @@ elif args.m2seq_with_double:
                               epsilon_paired=args.Pmin_paired,
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
-                              save_bpp_fig=args.save_bpp_fig)
+                              save_bpp_fig=args.save_bpp_fig,
+                              punpaired_chunk_size=args.max_seq_punpaired_plot)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
