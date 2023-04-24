@@ -396,11 +396,11 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                     while not good_pad:
 
                         for i, seq in enumerate(seqs):
-                            if i % 5 == 0 and i != 0:
+                            if i % 50 == 0 and i != 0:
                                 print(i)
                             full_seq = pad_5s[current_pad].seq + \
                                 str(seq.seq).upper().replace('U', 'T')
-                            print(region_unpaired,pad_5n,pad_3n)
+
                             good_pad, p_unpaired = check_struct_bpp(
                                 full_seq, region_unpaired, region_paired_A,
                                 region_paired_B, regionA, regionB,
