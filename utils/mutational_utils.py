@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import os
 from itertools import product, chain
 from random import shuffle, sample, choices, random
 from tqdm import tqdm
@@ -23,7 +24,6 @@ from arnie.utils import convert_dotbracket_to_bp_list
 
 # unclear/test behaviour of double mutant in overlap eg 1-12.1-12
 
-# make image folder if none exists, 
 # print reduce barcode
 ###############################################################################
 
@@ -609,6 +609,10 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               save_image_folder=None,save_bpp_fig=0,
                               punpaired_chunk_size=500,used_barcodes=None):
 
+    if save_image_folder is not None:
+        if not os.path.exists(save_image_folder):
+            print(f'{save_image_folder} did not exists, creating.')
+            os.makedirs(save_image_folder)
     # get and randomly shuffle all potential barcoces
     all_uids = get_all_barcodes(
         num_bp=num_bp, loop=loop, num5hang=num5hang, polyA5=num5polyA)
