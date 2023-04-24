@@ -6,6 +6,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from Bio import SeqIO, Seq
 from arnie.bpps import bpps
+from arnie.utils import convert_dotbracket_to_bp_list
 
 
 ###############################################################################
@@ -116,6 +117,20 @@ def get_same_length(fasta):
             return False
     return True
 
+def get_bp_set_from_dotbracket(dotbracket):
+    return convert_dotbracket_to_bp_list(dotbracket) # TODO not pseudo compatible
+
+
+def remove_seqs_already_in_other_file(fasta,other_fasta,out_file):
+    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    names = list(SeqIO.parse(other_fasta, "fasta"))
+    names = [n.name for n in names]
+    good_seqs = []
+    for seq_rec in all_seqs:
+        if seq_rec.name not in names:
+            good_seqs.append(seq_rec)
+    SeqIO.write(good_seqs, out_file, "fasta")
+
 ###############################################################################
 # get desired sequences
 ###############################################################################
@@ -127,7 +142,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     seqs = list(SeqIO.parse(fasta, "fasta"))
     windows = []
     for seq_rec in seqs:
-        seq = seq_rec.seq.upper().replace("U", "T")
+        seq = str(seq_rec.seq).upper().replace("U", "T")
         for i in range(0, len(seq), window_slide):
             if i+window_length > len(seq):
                 if not circularize:
@@ -196,11 +211,12 @@ def get_regions_for_doublemut(doublemuts):
 
 
 def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
+    # ,do_not_include_wcf=False
     # 9 per pair * lenregionA * lenregionB
     print("Getting all double mutants.")
-
+    #wfc_base_pairs = ['AT','TA','CG','GC']
     all_WT = list(SeqIO.parse(fasta, "fasta"))
-    all_double_mutants = []  # unlike single mutant, WT not saved
+    all_double_mutants = [] 
     if len(all_WT) != len(regionAs) or len(all_WT) != len(regionBs):
         print(f'WARNING: you must list regions (as a list of lists) for all sequences in the fasta, number sequences in fasta {len(all_WT)} and number of regions specified {len(regionAs)} {len(regionBs)}')
     for record, regionA, regionB in zip(all_WT, regionAs, regionBs):
@@ -213,6 +229,7 @@ def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
                     for j in regionB:
                         for mutB in bases:
                             if mutB != seq[j]:
+                                #if not (do_not_include_wcf and (mutA+mutB in wfc_base_pairs)):
                                 name = f' {record.id}_{i}{seq[i]}-{mutA}_{j}{seq[j]}-{mutB}'
                                 if i < j:
                                     new_seq = seq[:i]+mutA + \
@@ -226,6 +243,54 @@ def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
     SeqIO.write(all_double_mutants, out_fasta, "fasta")
     print(f'Saved all double mutants between the 2 regions to {out_fasta}.')
 
+def get_wcf_rescue_mutants(fasta,out_fasta,bp_sets):
+    wfc_base_pairs = ['AT','TA','CG','GC']
+    print("Getting all rescue mutants.")
+
+    all_WT = list(SeqIO.parse(fasta, "fasta"))
+    all_rescue_mutants = []
+    if len(all_WT) != len(bp_sets):
+        print(f'WARNING: bps must be a list, one for each sequence in fasta, of lists of basepairs to rescue for that sequence. You have {len(all_WT)} inputted sequences and {len(bp_sets)} base-pair sets.')
+    for record, bps in zip(all_WT,bp_sets):
+        seq = record.seq.upper().replace("U", "T")
+        for bp in bps:
+            current_bp = seq[bp[0]]+seq[bp[1]]
+            for new_bp in wfc_base_pairs:
+                if new_bp != current_bp:
+                    if bp[0]<bp[1]:
+                        name = f' {record.id}_{bp[0]}{seq[bp[0]]}-{new_bp[0]}_{bp[1]}{seq[bp[1]]}-{new_bp[1]}'
+                        new_seq = seq[:bp[0]]+new_bp[0] +seq[bp[0]+1:bp[1]]+new_bp[1]+seq[bp[1]+1:]
+                    else:
+                        name = f' {record.id}_{bp[1]}{seq[bp[1]]}-{new_bp[1]}_{bp[0]}{seq[bp[0]]}-{new_bp[0]}'
+                        new_seq = seq[:bp[1]]+new_bp[1] +seq[bp[1]+1:bp[0]]+new_bp[0]+seq[bp[0]+1:]
+                    new_mut = SeqIO.SeqRecord(
+                                    Seq.Seq(new_seq), name, '', '')
+                    all_rescue_mutants.append(new_mut)
+    SeqIO.write(all_rescue_mutants, out_fasta, "fasta")
+    print(f'Saved all rescue mutants to {out_fasta}.')
+
+def add_known_pads(fasta,out_fasta,pad5_dict,pad3_dict):
+    all_WT = list(SeqIO.parse(fasta, "fasta"))
+    all_seqs = []
+    for record in all_WT:
+        seq = record.seq.upper().replace("U", "T")
+        pad5 = pad5_dict[len(seq)]
+        pad3 = pad3_dict[len(seq)]
+        name = f' {record.id}_{len(pad5)}pad{len(pad3)}'
+        new_seq = SeqIO.SeqRecord(Seq.Seq(pad5+seq+pad3),name,'','')
+        all_seqs.append(new_seq)
+    SeqIO.write(all_seqs, out_fasta, "fasta")
+    print(f'Saved all with correct constant pad added to {out_fasta}.')
+
+def get_used_barcodes(fasta,start,end):
+    # inclusive
+    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    barcodes = []
+    for record in all_seqs:
+        seq = record.seq.upper().replace("U", "T")
+        barcode = seq[start:end+1]
+        barcodes.append(str(seq))
+    return barcodes
 
 ###############################################################################
 # add library parts
@@ -370,6 +435,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                 # numbp_loop_numbp_hang_seq_hang_numbp_loop_numbp
                 part_lengths = [num_bp5, loop_len5, num_bp5, num_hang5, len(
                     str(seqs[0].seq)), num_hang3, num_bp3, loop_len3, num_bp3]
+                #print(part_lengths)
                 print("Searching for 5' pad")
                 region_unpaired = list(
                     range(sum(part_lengths[:1]), sum(part_lengths[:2])))
@@ -540,7 +606,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               epsilon_paired=MINPROB_PAIRED,
                               epsilon_avg_paired=MINAVGPROB_PAIRED,
                               save_image_folder=None,save_bpp_fig=0,
-                              punpaired_chunk_size=500):
+                              punpaired_chunk_size=500,used_barcodes=None):
 
     # get and randomly shuffle all potential barcoces
     all_uids = get_all_barcodes(
@@ -590,8 +656,15 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
             new_lines = []
         while not uid_good:
             uid = all_uids[current_uid].seq
+            if used_barcodes is not None:
+                while str(uid) in used_barcodes:
+                    print('is true sometimes TEST')
+                    current_uid += 1
+                    uid = all_uids[current_uid].seq
+                
             full_seq = f'{seq5}{seq}{uid}{seq3}'
             current_uid += 1
+
             prob_factor = 0.9**(1+(seq_count//100))
 
             if save_image_folder is not None:
@@ -779,3 +852,52 @@ def plot_punpaired_from_fasta(fasta,save_image):
             labels.append('')
 
     plot_punpaired(p_unpaireds, labels, seqs, muts, [], [], save_image)
+
+'''
+dbs = ['((..(((((...(((.(((((((((((..((((((.(((((......)))))..))))))......)))(((((((.((......)))))))))(((....)))))))))))))).))))).))',
+'(((((((..((.(((..(((((((((((((((..(((.(((......)))))).)))))....)))).(((((((.(((......))))))))))(((((((.......))))))))))))).))))))))))))',
+'((((..((.((.(((..(((((((((((((((..(((.(((......)))))).)))))....).)))(((((((.(((......))))))))))(((((((.......))))))))))))).))))))).))))']
+bp_sets = [get_bp_set_from_dotbracket(db) for db in dbs]
+get_wcf_rescue_mutants('../SL5-M2seq_split/SL5_input.fasta','../SL5-M2seq_split/SL5_rescue_mut.fasta',bp_sets)
+add_known_pads('../SL5-M2seq_split/SL5_rescue_mut.fasta','../SL5-M2seq_split/SL5_rescue_mut_pad.fasta',{124:'TCTAC',135:''},{124:'AAAAAT',135:''})
+used_barcodes = get_used_barcodes('../SL5-M2seq_split/SL5_library.fasta',161,184)
+
+add_fixed_seq_and_barcode('../SL5-M2seq_split/SL5_rescue_mut_pad.fasta',
+                              '../SL5-M2seq_split/SL5_rescuelibrary.fasta',
+                              epsilon_interaction=0.075,
+                              epsilon_punpaired=0.7,
+                              epsilon_avg_punpaired=0.8,
+                              epsilon_paired=0.75,
+                              epsilon_avg_paired=0.85,
+                              save_image_folder='../SL5-M2seq_split/figsrescue',
+                              save_bpp_fig=0.1,
+                              punpaired_chunk_size=500,
+                              used_barcodes=used_barcodes)
+combine_fastas(['../SL5-M2seq_split/SL5_library.fasta', '../SL5-M2seq_split/SL5_rescuelibrary.fasta'], 
+        '../SL5-M2seq_split/SL5_library_with_rescues.fasta')
+format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues.fasta', '../SL5-M2seq_split/SL5_library_with_rescues.csv', file_format='twist')
+format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues.fasta', '../SL5-M2seq_split/SL5_library_with_rescues.txt', file_format='custom_array')
+
+
+get_all_double_mutants('../SL5-M2seq_split/SL5_input.fasta', '../SL5-M2seq_split/SL5_control_mut.fasta', [[],[76,77,78],[]], [[],[85,86,87],[]])
+remove_seqs_already_in_other_file('../SL5-M2seq_split/SL5_control_mut.fasta','../SL5-M2seq_split/SL5_rescue_mut.fasta','../SL5-M2seq_split/SL5_control_mut_no_repeats.fasta')
+
+add_known_pads('../SL5-M2seq_split/SL5_control_mut_no_repeats.fasta','../SL5-M2seq_split/SL5_control_mut_pad.fasta',{124:'TCTAC',135:''},{124:'AAAAAT',135:''})
+
+used_barcodes = get_used_barcodes('../SL5-M2seq_split/SL5_library_with_rescues.fasta',161,184)
+add_fixed_seq_and_barcode('../SL5-M2seq_split/SL5_control_mut_pad.fasta',
+                              '../SL5-M2seq_split/SL5_controllibrary.fasta',
+                              epsilon_interaction=0.075,
+                              epsilon_punpaired=0.7,
+                              epsilon_avg_punpaired=0.8,
+                              epsilon_paired=0.75,
+                              epsilon_avg_paired=0.85,
+                              save_image_folder='../SL5-M2seq_split/figcontrol',
+                              save_bpp_fig=0.1,
+                              punpaired_chunk_size=500,
+                              used_barcodes=used_barcodes)
+combine_fastas(['../SL5-M2seq_split/SL5_library_with_rescues.fasta', '../SL5-M2seq_split/SL5_controllibrary.fasta'], 
+        '../SL5-M2seq_split/SL5_library_with_rescues_control.fasta')
+format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues_control.fasta', '../SL5-M2seq_split/SL5_library_with_rescues_control.csv', file_format='twist')
+format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues_control.fasta', '../SL5-M2seq_split/SL5_library_with_rescues_control.txt', file_format='custom_array')
+'''

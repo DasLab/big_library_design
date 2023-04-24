@@ -5,7 +5,7 @@ from utils.mutational_utils import *
 # Arguments
 ###############################################################################
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-i', '--input_fasta', type=str, required=True,
                     help='Sequences to make library out of, file in fasta format.')
 parser.add_argument('-o', '--output_prefix', type=str,
