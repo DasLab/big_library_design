@@ -49,8 +49,8 @@ def get_reverse_complement(seq):
     '''
     dna = _get_dna_from_SeqRecord(seq)
     reverse = dna[::-1]
-    complements = ['T':'A','A':'T','C','G']
-    reverse_complement = ''.join([complements.get(s,s) for s in reverse])
+    complements = ['T':'A', 'A':'T', 'C', 'G']
+    reverse_complement = ''.join([complements.get(s, s) for s in reverse])
     return reverse_complement
 
 
@@ -138,10 +138,11 @@ def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
     '''
     all_seqs = list(SeqIO.parse(fasta, "fasta"))
     other_seqs = list(SeqIO.parse(other_fasta, "fasta"))
-    good_seqs = remove_seqs_in_other_list(all_seqs,other_seqs)
+    good_seqs = remove_seqs_in_other_list(all_seqs, other_seqs)
     SeqIO.write(good_seqs, out_file, "fasta")
 
-def remove_seqs_in_other_list(seqsA,seqsB):
+
+def remove_seqs_in_other_list(seqsA, seqsB):
     '''
     Given 2 lists of SeqRecord, remove any SeqRecord in A
     that has same name as SeqRecord in B. 
@@ -153,6 +154,7 @@ def remove_seqs_in_other_list(seqsA,seqsB):
         if seq_rec.name not in names:
             good_seqs.append(seq_rec)
     return good_seqs
+
 
 def _get_dna_from_SeqRecord(seqrecord):
     dna = str(seqrecord.seq).upper().replace("U", "T")
@@ -226,7 +228,7 @@ def get_all_single_mutants(fasta, out_fasta, bases=BASES):
         fasta (str): fasta file containing sequence to get windows of
         out_fasta (str): if specified, save mutants to fasta (default None)
         bases (list): what bases can be selected as mutants (default ['A', 'C', 'G', 'T'])
-    
+
     Returns:
         list of SeqRecord with the mutants
         if out_fasta specified, also saves these to fasta file
@@ -522,7 +524,7 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                 # numbp_loop_numbp_hang_seq_hang_numbp_loop_numbp
                 part_lengths = [num_bp5, loop_len5, num_bp5, num_hang5, len(
                     str(seqs[0].seq)), num_hang3, num_bp3, loop_len3, num_bp3]
-                # print(part_lengths)
+
                 print("Searching for 5' pad")
                 region_unpaired = list(
                     range(sum(part_lengths[:1]), sum(part_lengths[:2])))
@@ -595,7 +597,9 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
                             if i % 50 == 0 and i != 0:
                                 print("b", i)
 
-                            full_seq = good5 + _get_dna_from_SeqRecord(seq) + pad_3s[current_pad].seq
+                            full_seq = good5 + \
+                                _get_dna_from_SeqRecord(
+                                    seq) + pad_3s[current_pad].seq
                             good_pad, p_unpaired = check_struct_bpp(
                                 full_seq, region_unpaired, region_paired_A,
                                 region_paired_B, regionA, regionB,
@@ -802,14 +806,15 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         seqs_for_labeling.append(full_seq)
         all_full_seqs.append(SeqIO.SeqRecord(Seq.Seq(full_seq), name, '', ''))
         p_unpaireds[name] = p_unpaired
-        if save_image_folder is not None and chunk_count == punpaired_chunk_size:
+        if ((save_image_folder is not None) and
+                (chunk_count == punpaired_chunk_size)):
             plot_punpaired(p_unpaireds,
                            [i if i % 10 == 0 else '' for i in range(
                                len(seqs_for_labeling[0]))],
                            seqs_for_labeling, muts,
-                           # f'{seq5}{" "*len(seq)}{" "*len(uid)}{seq3}',
                            [len(seq5), len(seq5)+len(seq), len(seq5) +
-                            len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)], pad_lines,
+                            len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)],
+                           pad_lines,
                            f'{save_image_folder}/all_p_unpaired{image_count}.png')
 
             chunk_count = 0
@@ -824,9 +829,9 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                        [i if i % 10 == 0 else '' for i in range(
                            len(seqs_for_labeling[0]))],
                        seqs_for_labeling, muts,
-                       # f'{seq5}{" "*len(seq)}{" "*len(uid)}{seq3}',
                        [len(seq5), len(seq5)+len(seq), len(seq5) +
-                        len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)], pad_lines,
+                        len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)],
+                       pad_lines,
                        f'{save_image_folder}/all_p_unpaired.png')
     return all_full_seqs
 
@@ -884,63 +889,135 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
 # visualize structures
 ###############################################################################
 
-def plot_bpp(bpp, seq, lines, save_image):
-    plt.figure(figsize=(len(seq)*0.12, len(seq)*0.12))
-    plt.imshow(bpp, origin='upper', cmap='gist_heat_r')
+
+def plot_bpp(bpp, seq, lines, save_image, cmap='gist_heat_r',
+             scale_factor=0.12, line_color='grey', xyticks_size=8, dpi=100,
+             freq_report_nuc_number=10):
+    '''
+    Plot base pair probability matrix and save image
+
+    Args:
+        bpp (array): square array with probability each base paired
+        seq (str): sequence
+        lines (list of ints): list of positions to draw vertical and horizantal lines
+        save_image (str): location to save image to
+        scale_factor (float): size of figure relative to length of sequence (default 0.12)
+        cmap (str): cmap for bpp (default 'gist_heat_r')
+        line_color (str): color to make lines (default 'grey')
+        xyticks_size (int): size of labels for y and x (seq) (default 8)
+        dpi (int): dpi to save image in (default 100)
+        freq_report_nuc_number(int): on x and y axis add nucleotide number
+            indexing from 0, every freq_report_nuc_number nucleotides (default 10)
+    '''
+
+    plt.figure(figsize=(len(seq)*scale_factor, len(seq)*scale_factor))
+
+    # plot base-pair probability as heatmap
+    plt.imshow(bpp, origin='upper', cmap=cmap)
+
+    # add nucleotide numbers to seq and plot on x and y axis
     xlabels = []
     ylabels = []
     for i, s in enumerate(seq):
-        if i % 10 == 0:
+        if i % freq_report_nuc_number == 0:
             ylabels.append(f'{i} {s}')
             xlabels.append(f'{s}\n{i}')
         else:
             xlabels.append(s)
             ylabels.append(s)
-    plt.xticks(range(len(seq)), xlabels, size=8)
-    plt.yticks(range(len(seq)), ylabels, size=8)
+    plt.xticks(range(len(seq)), xlabels, size=xyticks_size)
+    plt.yticks(range(len(seq)), ylabels, size=xyticks_size)
+
+    # plot vertical and horizantal lines to mark sequence regions
     for line in lines:
-        plt.hlines(line, 0, len(seq), color="grey")
-        plt.vlines(line, 0, len(seq), color="grey")
+        plt.hlines(line, 0, len(seq), color=line_color)
+        plt.vlines(line, 0, len(seq), color=line_color)
+
+    # formatting
     plt.xlim(0, len(seq))
     plt.ylim(len(seq), 0)
-    plt.savefig(save_image, bbox_inches='tight', dpi=100)
+
+    # save
+    plt.savefig(save_image, bbox_inches='tight', dpi=dpi)
     plt.close()
 
 
-def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image):
-    plt.figure(figsize=(len(seqs[0])*0.3, len(p_unpaired)*0.3))
+def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines,
+                   cmap='gist_heat_r',linewidth=8,line_color='cyan',pad_line_color='lime',
+                   save_image, scale_factor=0.3, seq_color='grey', mutant_color='cyan',
+                   xyticks_size=8, dpi=100):
+
+    '''
+    Plot probability probability unpaired for sequences and save image
+
+    Args:
+        p_unpaired (dict): dictionary with sequence_name:array of punpaired, all punpaired must be same length
+        xlabels (list): list of xlabels the length of seuqences 
+        seqs (list of str): list of sequences to plot
+        muts (list of lists of int): for each sequence a list of mutation locations
+        lines (list of ints): list of sequence positions to draw vertical lines over all sequences
+        pad_lines (list of list of ints); for each sequence a list of location to draw lines 
+        save_image (str): location to save image to
+        scale_factor (float): size of figure relative to length of sequence and number of sequences (default 0.3)
+        cmap (str): cmap for bpp (default 'gist_heat_r')
+        linewidth (int): width of vertical lines to draw (lines and pad_line) (default 8)
+        line_color (str): color of lines (default 'cyan')
+        pad_line_color (str): color of pad_lines (default 'lime')
+        seq_color (str): color to make sequence (default 'grey')
+        mutant_color (str): color to make mutations (default 'cyan')
+        xyticks_size (int): size of labels for y (sequence name) and x (xlabels) (default 8)
+        dpi (int): dpi to save image in (default 100)
+    '''
+
+    plt.figure(figsize=(len(seqs[0])*scale_factor,
+                        len(p_unpaired)*scale_factor))
+
+    # plot p unpaired as heatmap
     df = pd.DataFrame(p_unpaired).T
-    plt.imshow(df, cmap='gist_heat_r')
+    plt.imshow(df, cmap=cmap)
+
+    # plot sequence ontop of heatmap, coloring the mutations
     ax = plt.gca()
     for i, (seq, mut) in enumerate(zip(seqs, muts)):
         for j, nuc in enumerate(seq):
             if j in mut:
                 text = ax.text(j, i, nuc, ha="center",
-                               va="center", color="cyan", weight='bold')
+                               va="center", color=mutant_color, weight='bold')
             else:
                 text = ax.text(j, i, nuc, ha="center",
-                               va="center", color="gray")
-    plt.yticks(range(len(df)), df.index, size=8)
+                               va="center", color=seq_color)
+    plt.yticks(range(len(df)), df.index, size=xyticks_size)
+    plt.xticks(range(len(xlabels)), xlabels, size=xyticks_size)
 
-    plt.xticks(range(len(xlabels)), xlabels, size=8)
+    # plot vertical lines to deliniate regions of sequence
     y1, y2 = ax.get_ylim()
     for line in lines:
-        plt.vlines(line-0.5, y1+1, y2-1, color="cyan", linewidth=8)
+        plt.vlines(line-0.5, y1+1, y2-1, color=line_color, linewidth=linewidth)
     for i, line in enumerate(pad_lines):
         if line != []:
-            plt.vlines(line[0]-0.5, i+0.5, i-0.5, color='lime', linewidth=8)
-            plt.vlines(line[1]-0.5, i+0.5, i-0.5, color='lime', linewidth=8)
+            plt.vlines(line[0]-0.5, i+0.5, i-0.5, color=pad_line_color, linewidth=linewidth)
+            plt.vlines(line[1]-0.5, i+0.5, i-0.5, color=pad_line_color, linewidth=linewidth)
+
+    # formatting
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
     ax.spines['left'].set_visible(False)
     ax.set_ylim((y1, y2))
     ax.tick_params(axis='both', which='both', length=0)
-    plt.savefig(save_image, bbox_inches='tight', dpi=100)
+
+    # save
+    plt.savefig(save_image, bbox_inches='tight', dpi=dpi)
     plt.close()
 
 
+###############################################################################
+# UNDER CONSTRUCTION
+###############################################################################
+
+
 def plot_punpaired_from_fasta(fasta, save_image):
+    # NOT well tested
     seqs = list(SeqIO.parse(fasta, "fasta"))
     p_unpaireds = {}
     seqs_list = []
