@@ -232,7 +232,9 @@ def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
                             if mutB != seq[j]:
                                 #if not (do_not_include_wcf and (mutA+mutB in wfc_base_pairs)):
                                 name = f' {record.id}_{i}{seq[i]}-{mutA}_{j}{seq[j]}-{mutB}'
-                                if i < j:
+                                if i ==j:
+                                    continue
+                                elif i < j:
                                     new_seq = seq[:i]+mutA + \
                                         seq[i+1:j]+mutB+seq[j+1:]
                                 else:
