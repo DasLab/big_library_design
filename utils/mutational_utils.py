@@ -972,7 +972,7 @@ def plot_bpp(bpp, seq, lines, save_image, cmap='gist_heat_r',
     plt.close()
 
 
-def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines,save_image,
+def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image,
                    cmap='gist_heat_r', linewidth=8, line_color='cyan', pad_line_color='lime',
                    scale_factor=0.3, seq_color='grey', mutant_color='cyan',
                    xyticks_size=8, dpi=100):
