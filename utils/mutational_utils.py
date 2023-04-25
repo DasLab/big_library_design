@@ -22,8 +22,6 @@ from arnie.utils import convert_dotbracket_to_bp_list
 # paralleize idea, run pad search on all single sequences
 # then when all done, come together and find one of those that works
 
-# unclear/test behaviour of double mutant in overlap eg 1-12.1-12
-
 # print reduce barcode
 ###############################################################################
 
