@@ -805,7 +805,7 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image
     for i,(seq,mut) in enumerate(zip(seqs,muts)):
         for j,nuc in enumerate(seq):
             if j in mut:
-                text = ax.text(j, i, nuc,ha="center", va="center", color="cyan")
+                text = ax.text(j, i, nuc,ha="center", va="center", color="cyan", weight='bold')
             else:
                 text = ax.text(j, i, nuc,ha="center", va="center", color="gray")
     plt.yticks(range(len(df)), df.index, size=8)
