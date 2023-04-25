@@ -148,6 +148,9 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                     a, b = len(seq)-window_length, len(seq)
                     new_seq = seq[a:b]
                     namenum = f'{a}-{b-1}'
+                    new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
+                                      f'{seq_rec.name}_{namenum}', '', '')
+                    windows.append(new_rec)
                     break
                 else:
                     a, b, c = i, len(seq), window_length-len(seq)+i
