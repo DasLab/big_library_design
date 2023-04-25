@@ -54,6 +54,8 @@ library.add_argument('--barcode_num5randomhang', type=int, default=0,
                      help="The legnth of addtional random (single-standed) sequence to place before the barcode stem.")
 library.add_argument('--barcode_loop', type=str, default='TTCG',
                      help="Constant loop sequence of the barcode stemloop.")
+library.add_argument('--num_barcodes_reduce_prob', type=float, default=100,
+                    help='Number of barcodes to try before reducing probability thresholds by 10%.')
 
 window = parser.add_argument_group('window')
 window.add_argument('--length', type=int, default=100,
@@ -111,7 +113,8 @@ if args.just_library:
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
                               save_bpp_fig=args.save_bpp_fig,
-                              punpaired_chunk_size=args.max_seq_punpaired_plot)
+                              punpaired_chunk_size=args.max_seq_punpaired_plot,
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -138,7 +141,8 @@ elif args.window:
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
                               save_bpp_fig=args.save_bpp_fig,
-                              punpaired_chunk_size=args.max_seq_punpaired_plot)
+                              punpaired_chunk_size=args.max_seq_punpaired_plot,
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -175,7 +179,8 @@ elif args.m2seq:
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
                               save_bpp_fig=args.save_bpp_fig,
-                              punpaired_chunk_size=args.max_seq_punpaired_plot)
+                              punpaired_chunk_size=args.max_seq_punpaired_plot,
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -215,7 +220,8 @@ elif args.m2seq_with_double:
                               epsilon_avg_paired=args.Pavg_paired,
                               save_image_folder=args.save_image_folder,
                               save_bpp_fig=args.save_bpp_fig,
-                              punpaired_chunk_size=args.max_seq_punpaired_plot)
+                              punpaired_chunk_size=args.max_seq_punpaired_plot,
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
