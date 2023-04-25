@@ -38,30 +38,23 @@ MINAVGPROB_PAIRED = 0.85
 MINPROB_UNPAIRED = 0.75
 MINAVGPROB_UNPAIRED = 0.85
 
-###############################################################################
-# utils
-###############################################################################
 
-
-def get_reverse_complement(seq):
-    '''
-    Return reverse complement of sequence, converts to DNA
-    '''
-    dna = _get_dna_from_SeqRecord(seq)
-    reverse = dna[::-1]
-    complements = ['T':'A', 'A':'T', 'C', 'G']
-    reverse_complement = ''.join([complements.get(s, s) for s in reverse])
-    return reverse_complement
+###############################################################################
+# fasta file manipulations
+###############################################################################
 
 
 def combine_fastas(fastas, out_fasta):
     '''
     Given list of fastas, appends all and saves new fasta.
     '''
+
     all_seqs = []
     for fasta in fastas:
         all_seqs.extend(list(SeqIO.parse(fasta, "fasta")))
+
     print(f'Combined and saved {fastas} to {out_fasta}')
+
     SeqIO.write(all_seqs, out_fasta, "fasta")
 
 
@@ -71,9 +64,12 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
     For agilent and twist: csv
     For custom_array: txt with each line a new sequence
     '''
+
     if file_format == 'twist' or file_format == 'agilent':
+
         if out_file[-4:] != '.csv':
             print('twist requires .csv files, change out_file')
+
         names = []
         seqs = []
         for seq in SeqIO.parse(fasta, "fasta"):
@@ -81,44 +77,63 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
             seqs.append(_get_dna_from_SeqRecord(seq))
         df = pd.DataFrame(np.array([names, seqs]).T,
                           columns=["name", "sequence"])
+
         df.to_csv(out_file, index=False)
         print(f'Written {out_file} for submission to twist or agilent.')
 
     elif file_format == 'custom_array':
+
         if out_file[-4:] != '.txt':
             print('custom_array requires .txt files, change out_file')
+
         with open(out_file, 'w') as f:
             for seq in SeqIO.parse(fasta, "fasta"):
                 f.write(_get_dna_from_SeqRecord(seq))
                 f.write('\n')
             print(f'Written {out_file} for submission to custom_array.')
+
     else:
-        print('file_format not supported, available: custom_array twist')
+        print('file_format not supported, available: custom_array twist agilent')
 
 
 def randomly_select_seqs(fasta, out_file, N):
     '''
     Given a fasta randomly select N sequences and save to new fasta
     '''
+
     all_seqs = list(SeqIO.parse(fasta, "fasta"))
     if len(seqs) > N:
         all_seqs = sample(all_seqs, N)
-    SeqIO.write(all_seqs, out_fasta, "fasta")
+
+        SeqIO.write(all_seqs, out_fasta, "fasta")
+
+        print(f'Written {out_file} for with {N} selected sequences.')
+
+    else:
+
+        SeqIO.write(all_seqs, out_fasta, "fasta")
+
+        print(f'WARNING: Written {out_file} but {fasta} had less than {N} sequences so none removed.')
 
 
 def get_same_length(fasta):
     '''
     Checks if all sequences in a given fasta are the same length
     '''
+
     seqs = list(SeqIO.parse(fasta, "fasta"))
-    length = None
-    for seq_rec in seqs:
-        len_seq = len(seq_rec.seq)
-        if length is None:
-            length = len_seq
-        elif length != len_seq:
+
+    length = len(seqs[0].seq)
+
+    for seq_rec in seqs[1:]:
+        if length != len_seq:
             return False
+
     return True
+
+###############################################################################
+# other utils
+###############################################################################
 
 
 def get_bp_set_from_dotbracket(dotbracket):
@@ -127,6 +142,21 @@ def get_bp_set_from_dotbracket(dotbracket):
     IGNORES pseudoknots
     '''
     return convert_dotbracket_to_bp_list(dotbracket)
+
+###############################################################################
+# helpers
+###############################################################################
+
+
+def _get_reverse_complement(seq):
+    '''
+    Return reverse complement of sequence, converts to DNA
+    '''
+    dna = _get_dna_from_SeqRecord(seq)
+    reverse = dna[::-1]
+    complements = {'T': 'A', 'A': 'T', 'C': 'G', 'G': 'C'}
+    reverse_complement = ''.join([complements.get(s, s) for s in reverse])
+    return reverse_complement
 
 
 def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
@@ -403,12 +433,12 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
                 uid = uid[num5hang:-num3hang]
 
             seq = ("A"*polyA5)+hang5+uid+loop + \
-                get_reverse_complement(uid)+hang3+("A"*polyA3)
+                _get_reverse_complement(uid)+hang3+("A"*polyA3)
             seq_rec = SeqIO.SeqRecord(Seq.Seq(seq),
                                       f' {uid}_{hang5}hang{hang3}', '', '')
         else:
             seq = ("A"*polyA5)+uid+loop + \
-                get_reverse_complement(uid)+("A"*polyA3)
+                _get_reverse_complement(uid)+("A"*polyA3)
             seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), f' {uid}', '', '')
         all_barcodes.append(seq_rec)
     if out_fasta is not None:
@@ -943,10 +973,9 @@ def plot_bpp(bpp, seq, lines, save_image, cmap='gist_heat_r',
 
 
 def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines,
-                   cmap='gist_heat_r',linewidth=8,line_color='cyan',pad_line_color='lime',
+                   cmap='gist_heat_r', linewidth=8, line_color='cyan', pad_line_color='lime',
                    save_image, scale_factor=0.3, seq_color='grey', mutant_color='cyan',
                    xyticks_size=8, dpi=100):
-
     '''
     Plot probability probability unpaired for sequences and save image
 
@@ -995,8 +1024,10 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines,
         plt.vlines(line-0.5, y1+1, y2-1, color=line_color, linewidth=linewidth)
     for i, line in enumerate(pad_lines):
         if line != []:
-            plt.vlines(line[0]-0.5, i+0.5, i-0.5, color=pad_line_color, linewidth=linewidth)
-            plt.vlines(line[1]-0.5, i+0.5, i-0.5, color=pad_line_color, linewidth=linewidth)
+            plt.vlines(line[0]-0.5, i+0.5, i-0.5,
+                       color=pad_line_color, linewidth=linewidth)
+            plt.vlines(line[1]-0.5, i+0.5, i-0.5,
+                       color=pad_line_color, linewidth=linewidth)
 
     # formatting
     ax.spines['top'].set_visible(False)
