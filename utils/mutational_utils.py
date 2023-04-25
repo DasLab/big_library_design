@@ -10,19 +10,6 @@ from arnie.bpps import bpps
 from arnie.utils import convert_dotbracket_to_bp_list
 
 
-###############################################################################
-# TODO
-###############################################################################
-# robustly test various pad lengths
-# general robustness of pad
-# pad, random but share length, all own pad, or directed eg AC*
-# can this not be done with bp_len 0
-# in pad probfactor too?
-
-# paralleize idea, run pad search on all single sequences
-# then when all done, come together and find one of those that works
-###############################################################################
-
 '''
 Example construct:
      26 nt.   5' fixed sequence
@@ -115,7 +102,7 @@ def get_same_length(fasta):
     return True
 
 def get_bp_set_from_dotbracket(dotbracket):
-    return convert_dotbracket_to_bp_list(dotbracket) # TODO not pseudo compatible
+    return convert_dotbracket_to_bp_list(dotbracket)
 
 
 def remove_seqs_already_in_other_file(fasta,other_fasta,out_file):
@@ -861,52 +848,3 @@ def plot_punpaired_from_fasta(fasta,save_image):
             labels.append('')
 
     plot_punpaired(p_unpaireds, labels, seqs, muts, [], [], save_image)
-
-'''
-dbs = ['((..(((((...(((.(((((((((((..((((((.(((((......)))))..))))))......)))(((((((.((......)))))))))(((....)))))))))))))).))))).))',
-'(((((((..((.(((..(((((((((((((((..(((.(((......)))))).)))))....)))).(((((((.(((......))))))))))(((((((.......))))))))))))).))))))))))))',
-'((((..((.((.(((..(((((((((((((((..(((.(((......)))))).)))))....).)))(((((((.(((......))))))))))(((((((.......))))))))))))).))))))).))))']
-bp_sets = [get_bp_set_from_dotbracket(db) for db in dbs]
-get_wcf_rescue_mutants('../SL5-M2seq_split/SL5_input.fasta','../SL5-M2seq_split/SL5_rescue_mut.fasta',bp_sets)
-add_known_pads('../SL5-M2seq_split/SL5_rescue_mut.fasta','../SL5-M2seq_split/SL5_rescue_mut_pad.fasta',{124:'TCTAC',135:''},{124:'AAAAAT',135:''})
-used_barcodes = get_used_barcodes('../SL5-M2seq_split/SL5_library.fasta',161,184)
-
-add_fixed_seq_and_barcode('../SL5-M2seq_split/SL5_rescue_mut_pad.fasta',
-                              '../SL5-M2seq_split/SL5_rescuelibrary.fasta',
-                              epsilon_interaction=0.075,
-                              epsilon_punpaired=0.7,
-                              epsilon_avg_punpaired=0.8,
-                              epsilon_paired=0.75,
-                              epsilon_avg_paired=0.85,
-                              save_image_folder='../SL5-M2seq_split/figsrescue',
-                              save_bpp_fig=0.1,
-                              punpaired_chunk_size=500,
-                              used_barcodes=used_barcodes)
-combine_fastas(['../SL5-M2seq_split/SL5_library.fasta', '../SL5-M2seq_split/SL5_rescuelibrary.fasta'], 
-        '../SL5-M2seq_split/SL5_library_with_rescues.fasta')
-format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues.fasta', '../SL5-M2seq_split/SL5_library_with_rescues.csv', file_format='twist')
-format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues.fasta', '../SL5-M2seq_split/SL5_library_with_rescues.txt', file_format='custom_array')
-
-
-get_all_double_mutants('../SL5-M2seq_split/SL5_input.fasta', '../SL5-M2seq_split/SL5_control_mut.fasta', [[],[76,77,78],[]], [[],[85,86,87],[]])
-remove_seqs_already_in_other_file('../SL5-M2seq_split/SL5_control_mut.fasta','../SL5-M2seq_split/SL5_rescue_mut.fasta','../SL5-M2seq_split/SL5_control_mut_no_repeats.fasta')
-
-add_known_pads('../SL5-M2seq_split/SL5_control_mut_no_repeats.fasta','../SL5-M2seq_split/SL5_control_mut_pad.fasta',{124:'TCTAC',135:''},{124:'AAAAAT',135:''})
-
-used_barcodes = get_used_barcodes('../SL5-M2seq_split/SL5_library_with_rescues.fasta',161,184)
-add_fixed_seq_and_barcode('../SL5-M2seq_split/SL5_control_mut_pad.fasta',
-                              '../SL5-M2seq_split/SL5_controllibrary.fasta',
-                              epsilon_interaction=0.075,
-                              epsilon_punpaired=0.7,
-                              epsilon_avg_punpaired=0.8,
-                              epsilon_paired=0.75,
-                              epsilon_avg_paired=0.85,
-                              save_image_folder='../SL5-M2seq_split/figcontrol',
-                              save_bpp_fig=0.1,
-                              punpaired_chunk_size=500,
-                              used_barcodes=used_barcodes)
-combine_fastas(['../SL5-M2seq_split/SL5_library_with_rescues.fasta', '../SL5-M2seq_split/SL5_controllibrary.fasta'], 
-        '../SL5-M2seq_split/SL5_library_with_rescues_control.fasta')
-format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues_control.fasta', '../SL5-M2seq_split/SL5_library_with_rescues_control.csv', file_format='twist')
-format_fasta_for_submission('../SL5-M2seq_split/SL5_library_with_rescues_control.fasta', '../SL5-M2seq_split/SL5_library_with_rescues_control.txt', file_format='custom_array')
-'''
