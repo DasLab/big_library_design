@@ -45,6 +45,7 @@ MINAVGPROB_UNPAIRED = 0.85
 
 
 def combine_fastas(fastas, out_fasta):
+
     '''
     Given list of fastas, appends all and saves new fasta.
     '''
@@ -59,6 +60,7 @@ def combine_fastas(fastas, out_fasta):
 
 
 def format_fasta_for_submission(fasta, out_file, file_format='twist'):
+
     '''
     From a fasta, save sequences in a format for library submission
     For agilent and twist: csv
@@ -97,6 +99,7 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
 
 
 def randomly_select_seqs(fasta, out_file, N):
+
     '''
     Given a fasta randomly select N sequences and save to new fasta
     '''
@@ -117,6 +120,7 @@ def randomly_select_seqs(fasta, out_file, N):
 
 
 def get_same_length(fasta):
+
     '''
     Checks if all sequences in a given fasta are the same length
     '''
@@ -131,16 +135,34 @@ def get_same_length(fasta):
 
     return True
 
+
+def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
+
+    '''
+    Given 2 fasta files, removes any sequence in the first that 
+    has same name as a sequence in the second, save non-duplicated
+    sequences of the first.
+    DOES NOT check seq itself and does not change the second fasta!
+    '''
+
+    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    other_seqs = list(SeqIO.parse(other_fasta, "fasta"))
+    good_seqs = _remove_seqs_in_other_list(all_seqs, other_seqs)
+    SeqIO.write(good_seqs, out_file, "fasta")
+
+
 ###############################################################################
 # other utils
 ###############################################################################
 
 
 def get_bp_set_from_dotbracket(dotbracket):
+
     '''
     Given a dotbracket structure, return a list of base-pairs
     IGNORES pseudoknots
     '''
+
     return convert_dotbracket_to_bp_list(dotbracket)
 
 ###############################################################################
@@ -149,35 +171,25 @@ def get_bp_set_from_dotbracket(dotbracket):
 
 
 def _get_reverse_complement(seq):
+
     '''
     Return reverse complement of sequence, converts to DNA
     '''
+
     dna = _get_dna_from_SeqRecord(seq)
     reverse = dna[::-1]
     complements = {'T': 'A', 'A': 'T', 'C': 'G', 'G': 'C'}
     reverse_complement = ''.join([complements.get(s, s) for s in reverse])
     return reverse_complement
 
+def _remove_seqs_in_other_list(seqsA, seqsB):
 
-def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
-    '''
-    Given 2 fasta files, removes any sequence in the first that 
-    has same name as a sequence in the second, save non-duplicated
-    sequences of the first.
-    DOES NOT check seq itself and does not change the second fasta!
-    '''
-    all_seqs = list(SeqIO.parse(fasta, "fasta"))
-    other_seqs = list(SeqIO.parse(other_fasta, "fasta"))
-    good_seqs = remove_seqs_in_other_list(all_seqs, other_seqs)
-    SeqIO.write(good_seqs, out_file, "fasta")
-
-
-def remove_seqs_in_other_list(seqsA, seqsB):
     '''
     Given 2 lists of SeqRecord, remove any SeqRecord in A
     that has same name as SeqRecord in B. 
     DOES NOT check seq itself!
     '''
+
     names = [n.name for n in seqsB]
     good_seqs = []
     for seq_rec in seqsA:
@@ -187,8 +199,69 @@ def remove_seqs_in_other_list(seqsA, seqsB):
 
 
 def _get_dna_from_SeqRecord(seqrecord):
-    dna = str(seqrecord.seq).upper().replace("U", "T")
+    if type(seqrecord)==str:
+        dna = seqrecord.upper().replace("U", "T")
+    else:
+        dna = str(seqrecord.seq).upper().replace("U", "T")
     return dna
+
+
+def _get_all_rand_seq(length, bases=BASES):
+    all_seq = []
+    for x in product(bases, repeat=length):
+        seq = ''.join(x)
+        seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), f' {seq}', '', '')
+        all_seq.append(seq_rec)
+    return all_seq
+
+
+def _get_5_3_split(length):
+    # 4+6+4+6 20
+    if length < 15 and length % 2 == 0:
+        pad_5_len, pad_3_len = length//2, length//2
+    elif length < 15:
+        pad_5_len, pad_3_len = length//2, 1+(length//2)
+    elif length < 20:
+        pad_5_len, pad_3_len = 0, length
+    elif length < 32:
+        pad_5_len, pad_3_len = length-20, 20
+    elif length % 2 == 0:
+        pad_5_len, pad_3_len = length//2, length//2
+    else:
+        pad_5_len, pad_3_len = length//2, 1+(length//2)
+    return pad_5_len, pad_3_len
+
+
+def _get_mutations_from_name(name):
+
+    '''
+    
+    '''
+
+    nucs = []
+    for name_part in name.split('_'):
+        if len(name_part) > 2:
+            if name_part[-2] == '-':
+                nucnum_A, nuc_B = name_part.split('-')
+                num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
+                if nuc_A in BASES and nuc_B in BASES:
+                    nucs.append(int(num))
+    return nucs
+
+
+def get_used_barcodes(fasta, start, end):
+    # TODO the add barcodes code should have an  option of
+    # fasta file with barcodes to not use, start, end
+    # and this code should move to helper?
+    # inclusive
+    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    barcodes = []
+    for record in all_seqs:
+        seq = _get_dna_from_SeqRecord(record)
+
+        barcode = seq[start:end+1]
+        barcodes.append(str(seq))
+    return barcodes
 
 
 ###############################################################################
@@ -198,6 +271,7 @@ def _get_dna_from_SeqRecord(seqrecord):
 
 def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 circularize=False):
+
     '''
     Get sliding windows from an inputted fasta file.
 
@@ -215,6 +289,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
         naming convention is the seqname_start-end with start and
         end inclusive and indexing from 0.
     '''
+
     print(f'Getting all sliding windows, {window_length}nt every {window_slide}nt.')
     seqs = list(SeqIO.parse(fasta, "fasta"))
     windows = []
@@ -251,6 +326,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
 
 
 def get_all_single_mutants(fasta, out_fasta, bases=BASES):
+
     '''
     Get all single mutants from sequences in a fasta file.
 
@@ -267,7 +343,9 @@ def get_all_single_mutants(fasta, out_fasta, bases=BASES):
         Indexing from 0.
         Generally, total is 3*length seq
     '''
+
     print("Getting all single mutants.")
+
     all_WT = SeqIO.parse(fasta, "fasta")
     all_single_mutants = []
     for record in all_WT:
@@ -287,8 +365,10 @@ def get_all_single_mutants(fasta, out_fasta, bases=BASES):
 
 
 def get_regions_for_doublemut(doublemuts):
+
     '''
     '''
+
     regionAs, regionBs = [], []
     for mutstr in doublemuts:
         strA, strB = mutstr.split('.')
@@ -312,6 +392,7 @@ def get_regions_for_doublemut(doublemuts):
 
 
 def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
+
     '''
 
         Generally, total is 9*lengthA*lengthB
@@ -352,7 +433,13 @@ def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
 
 
 def get_wcf_rescue_mutants(fasta, out_fasta, bp_sets):
+    
+    '''
+    
+    '''
+
     wfc_base_pairs = ['AT', 'TA', 'CG', 'GC']
+
     print("Getting all rescue mutants.")
 
     all_WT = list(SeqIO.parse(fasta, "fasta"))
@@ -383,6 +470,11 @@ def get_wcf_rescue_mutants(fasta, out_fasta, bp_sets):
 
 
 def add_known_pads(fasta, out_fasta, pad5_dict, pad3_dict):
+
+    '''
+    
+    '''
+
     all_WT = list(SeqIO.parse(fasta, "fasta"))
     all_seqs = []
     for record in all_WT:
@@ -397,17 +489,6 @@ def add_known_pads(fasta, out_fasta, pad5_dict, pad3_dict):
     print(f'Saved all with correct constant pad added to {out_fasta}.')
 
 
-def get_used_barcodes(fasta, start, end):
-    # inclusive
-    all_seqs = list(SeqIO.parse(fasta, "fasta"))
-    barcodes = []
-    for record in all_seqs:
-        seq = _get_dna_from_SeqRecord(record)
-
-        barcode = seq[start:end+1]
-        barcodes.append(str(seq))
-    return barcodes
-
 ###############################################################################
 # add library parts
 ###############################################################################
@@ -416,6 +497,11 @@ def get_used_barcodes(fasta, start, end):
 def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
                      polyA5=0, polyA3=0,
                      loop=TETRALOOP, bases=BASES):
+    
+    '''
+    
+    '''
+
     # probably should add ability to randomly generate but this
     # is fast enough for these small barcode
     print("Getting all possible barcodes.")
@@ -447,34 +533,12 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
     return all_barcodes
 
 
-def _get_all_rand_seq(length, bases=BASES):
-    all_seq = []
-    for x in product(bases, repeat=length):
-        seq = ''.join(x)
-        seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), f' {seq}', '', '')
-        all_seq.append(seq_rec)
-    return all_seq
-
-
-def _get_5_3_split(length):
-    # 4+6+4+6 20
-    if length < 15 and length % 2 == 0:
-        pad_5_len, pad_3_len = length//2, length//2
-    elif length < 15:
-        pad_5_len, pad_3_len = length//2, 1+(length//2)
-    elif length < 20:
-        pad_5_len, pad_3_len = 0, length
-    elif length < 32:
-        pad_5_len, pad_3_len = length-20, 20
-    elif length % 2 == 0:
-        pad_5_len, pad_3_len = length//2, length//2
-    else:
-        pad_5_len, pad_3_len = length//2, 1+(length//2)
-    return pad_5_len, pad_3_len
-
-
 def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
                    min_hang=3, bases=BASES):
+    
+    '''
+    
+    '''
 
     if side == "5'":
         # (((....)))....
@@ -511,6 +575,10 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
             epsilon_paired=MINPROB_PAIRED,
             epsilon_avg_paired=MINAVGPROB_PAIRED,
             loop=TETRALOOP, min_hang=3, min_num_samples=30):
+    
+    '''
+    
+    '''
 
     # crurent options: rand_same_all SL_same_per_length
 
@@ -712,18 +780,6 @@ def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
     return padded_seqs
 
 
-def get_mutations_from_name(name):
-    nucs = []
-    for name_part in name.split('_'):
-        if len(name_part) > 2:
-            if name_part[-2] == '-':
-                nucnum_A, nuc_B = name_part.split('-')
-                num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
-                if nuc_A in BASES and nuc_B in BASES:
-                    nucs.append(int(num))
-    return nucs
-
-
 def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               num_bp=8, num5hang=0, num5polyA=4,
                               loop=TETRALOOP,
@@ -772,7 +828,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                      len(seq5) + len(seq)+num5hang+num5polyA+(2*num_bp)+len(loop)))[::-1]
 
         uid_good = False
-        mutations = get_mutations_from_name(seq_rec.name)
+        mutations = _get_mutations_from_name(seq_rec.name)
 
         seq_count = 0
         lines = [len(seq5), len(seq5)+len(seq),
