@@ -21,8 +21,6 @@ from arnie.utils import convert_dotbracket_to_bp_list
 
 # paralleize idea, run pad search on all single sequences
 # then when all done, come together and find one of those that works
-
-# print reduce barcode
 ###############################################################################
 
 '''
@@ -610,7 +608,8 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               epsilon_paired=MINPROB_PAIRED,
                               epsilon_avg_paired=MINAVGPROB_PAIRED,
                               save_image_folder=None,save_bpp_fig=0,
-                              punpaired_chunk_size=500,used_barcodes=None):
+                              punpaired_chunk_size=500,used_barcodes=None,
+                              num_barcode_before_reduce=100):
 
     if save_image_folder is not None:
         if not os.path.exists(save_image_folder):
@@ -672,8 +671,10 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                 
             full_seq = f'{seq5}{seq}{uid}{seq3}'
             current_uid += 1
-
-            prob_factor = 0.9**(1+(seq_count//100))
+            
+            prob_factor = 0.9**(1+(seq_count//num_barcode_before_reduce))
+            if seq_count//num_barcode_before_reduce==0 and seq_count!=0:
+                print(f'For {seq}, failed to find barcode from {seq_count} barcodes, reducing (increasing for max prob) probabilities needed by a factor of {prob_factor}.')
 
             if save_image_folder is not None:
 
