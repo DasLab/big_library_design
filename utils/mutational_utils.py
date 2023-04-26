@@ -154,7 +154,7 @@ def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
 def get_bp_set_from_dotbracket(dotbracket):
     '''
     Given a dotbracket structure, return a list of base-pairs
-    IGNORES pseudoknots
+    IGNORES pseudoknots TODO
     '''
 
     return convert_dotbracket_to_bp_list(dotbracket)
@@ -186,12 +186,21 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     '''
 
     print(f'Getting all sliding windows, {window_length}nt every {window_slide}nt.')
+
+    # get sequences and initialize
     seqs = list(SeqIO.parse(fasta, "fasta"))
     windows = []
+
     for seq_rec in seqs:
-        seq = str(seq_rec.seq).upper().replace("U", "T")
+
+        # loop through sequence every window_slide nucleotides
+        seq = _get_dna_from_SeqRecord(seq_rec)
         for i in range(0, len(seq), window_slide):
+
+            # when we hit the end of sequence
             if i+window_length > len(seq):
+
+                # add last window
                 if not circularize:
                     a, b = len(seq)-window_length, len(seq)
                     new_seq = seq[a:b]
@@ -201,10 +210,13 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                                               '', '')
                     windows.append(new_rec)
                     break
+
+                # or circularize and add from 5' until very end
                 else:
                     a, b, c = i, len(seq), window_length-len(seq)+i
                     new_seq = seq[a:b]+seq[:c]
                     namenum = f'{a}-{c-1}'
+            # otherwise just add window as normal
             else:
                 a, b = i, i+window_length
                 new_seq = seq[a:b]
@@ -214,18 +226,22 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
             new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
                                       f'{seq_rec.name}_{namenum}', '', '')
             windows.append(new_rec)
+
+    # save file
     if out_fasta is not None:
         SeqIO.write(windows, out_fasta, "fasta")
         print(f'Saved windows to {out_fasta}.')
+
+    # return list of windows
     return windows
 
 
-def get_all_single_mutants(fasta, out_fasta, bases=BASES):
+def get_all_single_mutants(fasta, out_fasta=None, bases=BASES):
     '''
     Get all single mutants from sequences in a fasta file.
 
     Args:
-        fasta (str): fasta file containing sequence to get windows of
+        fasta (str): fasta file containing sequence to get mutants of
         out_fasta (str): if specified, save mutants to fasta (default None)
         bases (list): what bases can be selected as mutants (default ['A', 'C', 'G', 'T'])
 
@@ -240,8 +256,10 @@ def get_all_single_mutants(fasta, out_fasta, bases=BASES):
 
     print("Getting all single mutants.")
 
+    # get all sequences and initialize
     all_WT = SeqIO.parse(fasta, "fasta")
     all_single_mutants = []
+
     for record in all_WT:
         seq = _get_dna_from_SeqRecord(record)
 
@@ -254,48 +272,43 @@ def get_all_single_mutants(fasta, out_fasta, bases=BASES):
                     new_mut = SeqIO.SeqRecord(Seq.Seq(new_seq), name, '', '')
                     all_single_mutants.append(new_mut)
 
-    SeqIO.write(all_single_mutants, out_fasta, "fasta")
-    print(f'Saved single mutants to {out_fasta}.')
+    # save file
+    if out_fasta is not None:
+        SeqIO.write(all_single_mutants, out_fasta, "fasta")
+        print(f'Saved single mutants to {out_fasta}.')
+    return all_single_mutants
 
 
-def get_regions_for_doublemut(doublemuts):
+def get_all_double_mutants(fasta, regionAs, regionBs, out_fasta=None, bases=BASES):
     '''
-    '''
+    Get all double mutants between specified region for all sequences in a fasta file.
 
-    regionAs, regionBs = [], []
-    for mutstr in doublemuts:
-        strA, strB = mutstr.split('.')
-        regionA = []
-        for nucrange in strA.split(','):
-            nucrange = [int(x) for x in nucrange.split('-')]
-            if len(nucrange) == 2:
-                regionA.extend(list(range(nucrange[0], nucrange[1]+1)))
-            else:
-                regionA.extend(nucrange)
-        regionAs.append(regionA)
-        regionB = []
-        for nucrange in strB.split(','):
-            nucrange = [int(x) for x in nucrange.split('-')]
-            if len(nucrange) == 2:
-                regionB.extend(list(range(nucrange[0], nucrange[1]+1)))
-            else:
-                regionB.extend(nucrange)
-        regionBs.append(regionB)
-    return regionAs, regionBs
+    Args:
+        fasta (str): fasta file containing sequence to get mutants of
+        regionAs (list of lists of int): for each sequence, a list of indices specifying first region
+        regionBs (list of lists of int): for each sequence, a list of indices specifying second region
+        out_fasta (str): if specified, save mutants to fasta (default None)
+        bases (list): what bases can be selected as mutants (default ['A', 'C', 'G', 'T'])
 
-
-def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
-    '''
-
+    Returns:
+        list of SeqRecord with the mutants
+        if out_fasta specified, also saves these to fasta file
+        naming convention is the seqname_#wt-mutant eg for sequence P4P6
+        mutant with 138 mutanted from G to A and 150 C to T is: P4P6_138G-A_150C-T
+        Indexing from 0 on mutants are ordered by nucleotide number.
         Generally, total is 9*lengthA*lengthB
     '''
 
     print("Getting all double mutants.")
 
+    # get all sequences and initialize
     all_WT = list(SeqIO.parse(fasta, "fasta"))
     all_double_mutants = []
+
+    # check user specified regions for every sequence in the fasta
     if len(all_WT) != len(regionAs) or len(all_WT) != len(regionBs):
         print(f'WARNING: you must list regions (as a list of lists) for all sequences in the fasta, number sequences in fasta {len(all_WT)} and number of regions specified {len(regionAs)} {len(regionBs)}')
+
     for record, regionA, regionB in zip(all_WT, regionAs, regionBs):
 
         seq = _get_dna_from_SeqRecord(record)
@@ -308,43 +321,72 @@ def get_all_double_mutants(fasta, out_fasta, regionAs, regionBs, bases=BASES):
                         for mutB in bases:
                             if mutB != seq[j]:
 
-                                name = f' {record.id}_{i}{seq[i]}-{mutA}_{j}{seq[j]}-{mutB}'
+                                # get mutant
+                                # name according to convention, in order, index at 1
                                 if i == j:
                                     continue
                                 elif i < j:
                                     new_seq = seq[:i]+mutA + \
                                         seq[i+1:j]+mutB+seq[j+1:]
+                                    name = f' {record.id}_{i}{seq[i]}-{mutA}_{j}{seq[j]}-{mutB}'
                                 else:
                                     new_seq = seq[:j]+mutB + \
                                         seq[j+1:i]+mutA+seq[i+1:]
+                                    name = f' {record.id}_{j}{seq[j]}-{mutB}_{i}{seq[i]}-{mutA}'
                                 new_mut = SeqIO.SeqRecord(
                                     Seq.Seq(new_seq), name, '', '')
                                 all_double_mutants.append(new_mut)
-    SeqIO.write(all_double_mutants, out_fasta, "fasta")
-    print(f'Saved all double mutants between the 2 regions to {out_fasta}.')
+
+    # save file
+    if out_fasta is not None:
+        SeqIO.write(all_double_mutants, out_fasta, "fasta")
+        print(f'Saved all double mutants between the 2 regions to {out_fasta}.')
+
+    return all_double_mutants
 
 
-def get_wcf_rescue_mutants(fasta, out_fasta, bp_sets):
+def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None):
+    '''
+    Get all watson-crick-franklin rescue mutants between specified basepairs for all sequences in a fasta file.
+
+    Args:
+        fasta (str): fasta file containing sequence to get mutants of
+        bp_sets (list of lists of pairs): for each sequence, a list of basepairs as a tuple or list of int
+        out_fasta (str): if specified, save mutants to fasta (default None)
+
+    Returns:
+        list of SeqRecord with the mutants
+        if out_fasta specified, also saves these to fasta file
+        naming convention is the seqname_#wt-mutant eg for sequence P4P6
+        mutant with 138 mutanted from G to A and 150 C to T is: P4P6_138G-A_150C-T
+        Indexing from 0 on mutants are ordered by nucleotide number.
+        Generally, total is 3*numbps
     '''
 
-    '''
-
+    # TODO can allow people to specify
     wfc_base_pairs = ['AT', 'TA', 'CG', 'GC']
 
     print("Getting all rescue mutants.")
 
+    # get all sequences and initialize
     all_WT = list(SeqIO.parse(fasta, "fasta"))
     all_rescue_mutants = []
+
+    # check user specified set of basepairs for every sequence in the fasta
     if len(all_WT) != len(bp_sets):
         print(f'WARNING: bps must be a list, one for each sequence in fasta, of lists of basepairs to rescue for that sequence. You have {len(all_WT)} inputted sequences and {len(bp_sets)} base-pair sets.')
+
     for record, bps in zip(all_WT, bp_sets):
 
         seq = _get_dna_from_SeqRecord(record)
 
+        # at each base pair, get rescue mutants
         for bp in bps:
             current_bp = seq[bp[0]]+seq[bp[1]]
             for new_bp in wfc_base_pairs:
                 if new_bp != current_bp:
+                    # get mutant
+                    # name according to convention, in order, index at 1
                     if bp[0] < bp[1]:
                         name = f' {record.id}_{bp[0]}{seq[bp[0]]}-{new_bp[0]}_{bp[1]}{seq[bp[1]]}-{new_bp[1]}'
                         new_seq = seq[:bp[0]]+new_bp[0] + \
@@ -356,8 +398,17 @@ def get_wcf_rescue_mutants(fasta, out_fasta, bp_sets):
                     new_mut = SeqIO.SeqRecord(
                         Seq.Seq(new_seq), name, '', '')
                     all_rescue_mutants.append(new_mut)
-    SeqIO.write(all_rescue_mutants, out_fasta, "fasta")
-    print(f'Saved all rescue mutants to {out_fasta}.')
+    # save file
+    if out_fasta is not None:
+        SeqIO.write(all_rescue_mutants, out_fasta, "fasta")
+        print(f'Saved all rescue mutants to {out_fasta}.')
+
+    return all_rescue_mutants
+
+
+###############################################################################
+# add library parts
+###############################################################################
 
 
 def add_known_pads(fasta, out_fasta, pad5_dict, pad3_dict):
@@ -379,11 +430,6 @@ def add_known_pads(fasta, out_fasta, pad5_dict, pad3_dict):
     print(f'Saved all with correct constant pad added to {out_fasta}.')
 
 
-###############################################################################
-# add library parts
-###############################################################################
-
-
 def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
                      polyA5=0, polyA3=0,
                      loop=TETRALOOP, bases=BASES):
@@ -392,7 +438,7 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
     '''
 
     # probably should add ability to randomly generate but this
-    # is fast enough for these small barcode
+    # is fast enough for these small barcode aka get_random_barcode
     print("Getting all possible barcodes.")
     all_barcodes = []
     for x in product(bases, repeat=num_bp+num5hang+num3hang):
@@ -1124,7 +1170,7 @@ def get_used_barcodes(fasta, start, end):
     # fasta file with barcodes to not use, start, end
     # and this code should move to helper?
     # inclusive
-    
+
     all_seqs = list(SeqIO.parse(fasta, "fasta"))
     barcodes = []
     for record in all_seqs:
@@ -1133,6 +1179,33 @@ def get_used_barcodes(fasta, start, end):
         barcode = seq[start:end+1]
         barcodes.append(str(seq))
     return barcodes
+
+
+def get_regions_for_doublemut(doublemuts):
+    '''
+    # TODO probably should be input double mutants and this goes to helper
+    '''
+
+    regionAs, regionBs = [], []
+    for mutstr in doublemuts:
+        strA, strB = mutstr.split('.')
+        regionA = []
+        for nucrange in strA.split(','):
+            nucrange = [int(x) for x in nucrange.split('-')]
+            if len(nucrange) == 2:
+                regionA.extend(list(range(nucrange[0], nucrange[1]+1)))
+            else:
+                regionA.extend(nucrange)
+        regionAs.append(regionA)
+        regionB = []
+        for nucrange in strB.split(','):
+            nucrange = [int(x) for x in nucrange.split('-')]
+            if len(nucrange) == 2:
+                regionB.extend(list(range(nucrange[0], nucrange[1]+1)))
+            else:
+                regionB.extend(nucrange)
+        regionBs.append(regionB)
+    return regionAs, regionBs
 
 
 ###############################################################################
