@@ -122,14 +122,21 @@ def get_same_length(fasta):
     '''
 
     seqs = list(SeqIO.parse(fasta, "fasta"))
+    return _get_same_length(seqs)[0]
+
+
+def _get_same_length(seqs):
+    '''
+    Checks if all sequences in a given fasta are the same length
+    '''
 
     length = len(seqs[0].seq)
 
     for seq_rec in seqs[1:]:
         if length != len_seq:
-            return False
+            return False, np.nan
 
-    return True
+    return True, length
 
 
 def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
@@ -439,11 +446,12 @@ def add_known_pads(fasta, pad5_dict, pad3_dict, out_fasta=None):
         name = f' {record.id}_{len(pad5)}pad{len(pad3)}'
         new_seq = SeqIO.SeqRecord(Seq.Seq(pad5+seq+pad3), name, '', '')
         all_seqs.append(new_seq)
-    
+
     # save file
     if out_fasta is not None:
         SeqIO.write(all_seqs, out_fasta, "fasta")
         print(f'Saved all with correct constant pad added to {out_fasta}.')
+
     return all_seqs
 
 
@@ -706,9 +714,42 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               epsilon_paired=MINPROB_PAIRED,
                               epsilon_avg_paired=MINAVGPROB_PAIRED,
                               save_image_folder=None, save_bpp_fig=0,
-                              punpaired_chunk_size=500, used_barcodes=None,
-                              num_barcode_before_reduce=100):
+                              punpaired_chunk_size=500, used_barcodes=[],
+                              num_barcode_before_reduce=100,
+                              percent_reduce_prob=10):
     '''
+    From a fasta of sequence, add constant regions and barcode
+
+    Args:
+        fasta (str): fasta file containing sequence to get mutants of
+        out_fasta (str): if specified, save mutants to fasta (default None)
+        seq5 (str): the constant sequence to place at 5' end of all sequences
+        seq3 (str): the constant sequence to place at 3' end of all sequences
+        num_bp (int): number of base pairs to have in barcode stem (default 8)
+        num5hang (int): number of random nucleotides to put before the stem (default 0)
+        num5polyA (int): number of A to put before the barcode (stem and 5 random hang if applicable) (default 4)
+        loop (str): sequence of loop to have in the hairpin
+        epsilon_interaction (float): Maximum base-pair-probability for 2 regions to be considered noninteracting
+        epsilon_punpaired (float): Minimum probability unpaired for region to be unpaired
+        epsilon_avg_punpaired (float): Average probability unpaired for region to be unpaired
+        epsilon_paired (float): Minimum base-pair-probability for 2 regions to be considered paired
+        epsilon_avg_paired (float): Average base-pair-probability for 2 regions to be considered paired
+        save_image_folder (str): folder to save images to
+        save_bpp_fig (float): proportion of sequences to save base-pair-probaility matrix figure, 0 is none, 1 is all
+        punpaired_chunk_size (int): max number of sequences to plot on each punpaired plot (default 500)
+        used_barcodes (list): list of sequences not to use as barcodes (default [])
+        num_barcode_before_reduce (int): for each sequence, the number of barcodes to try 
+            before reducing the probability thresholds by 10% (default 100)
+        percent_reduce_prob (float): percent to reduce probability threshold each time (default 10)
+
+    Returns:
+        list of SeqRecord which are library ready
+        if out_fasta specified, also saves these to fasta file, _libraryready appended to names
+
+    TODO function to just save all bpps given a fasta?
+    TODO for pad instead of having to pass all, have like 90% pass rate or something!!!
+    TODO let's actualyl number starting from 1
+    TODO let's actually number images with desired sequence at 1 ?
     '''
 
     # if image folder does not exist create it
@@ -722,41 +763,45 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                 polyA5=num5polyA)
     shuffle(all_uids)
 
-    # read sequences and initialize variables
+    # read sequences, check all same length, and initialize variables
     seqs = SeqIO.parse(fasta, "fasta")
+    same_length, seq_len = _get_same_length(seqs)
+    if not same_length:
+        print("ERROR: sequences not all same length.")
     all_full_seqs, p_unpaireds, rejected_uids = 0, [], {}, []
     pad_lines, new_lines, seqs_for_labeling, muts = [], [], [], []
     current_uid, chunk_count, image_count = 0, 0, 0
+    seq5 = _get_dna_from_SeqRecord(seq5)
+    seq3 = _get_dna_from_SeqRecord(seq3)
+    loop = _get_dna_from_SeqRecord(loop)
+    regions = [len(seq5), len(seq5)+seq_len,
+               len(seq5)+seq_len+num5hang+num5polyA+(2*num_bp)+len(loop)]
+    regionA = list(range(regions[0], regions[1]))
+    regionB = list(range(regions[1], regions[2]))
+    region_unpaired = list(range(regions[1],
+                                 regions[1]+num5hang+num5polyA))
+    region_unpaired.extend(list(range(regions[2]-num_bp-len(loop),
+                                      regions[2]-num_bp)))
+    region_paired_A = list(range(regions[1]+num5hang+num5polyA,
+                                 regions[2]-num_bp-len(loop)))
+    region_paired_B = list(range(regions[2]-num_bp, regions[2]))[::-1]
+    pun_xlabel = [i if i % 10 == 0 else '' for i in range(seq_len)]
 
     print("Adding 5', barcode, 3'.")
 
     for seq_rec in tqdm(list(seqs)):
-        chunk_count += 1
 
         # get sequence and name
         seq = _get_dna_from_SeqRecord(seq_rec)
         name = seq_rec.name+'_libraryready'
-        mutations = _get_mutations_from_name(seq_rec.name)
-
-        # 5_seq_num5polyA_num5hang_numbp_loop_numbp_3
-        regionA = list(range(len(seq5), len(seq5)+len(seq)))
-        regionB = list(range(len(seq5)+len(seq), len(seq5) +
-                             len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)))
-        region_unpaired = list(range(len(seq5)+len(seq),
-                                     len(seq5) + len(seq)+num5hang+num5polyA))
-        region_unpaired.extend(list(range(len(seq5)+len(seq)+num5hang+num5polyA+num_bp,
-                                          len(seq5) + len(seq)+num5hang+num5polyA+num_bp+len(loop))))
-        region_paired_A = list(range(len(seq5)+len(seq)+num5hang+num5polyA,
-                                     len(seq5) + len(seq)+num5hang+num5polyA+num_bp))
-        region_paired_B = list(range(len(seq5)+len(seq)+num5hang+num5polyA+num_bp+len(loop),
-                                     len(seq5) + len(seq)+num5hang+num5polyA+(2*num_bp)+len(loop)))[::-1]
-        lines = [len(seq5), len(seq5)+len(seq),
-                 len(seq5)+len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)]
 
         # initialize values
         uid_good = False
         seq_count = 0
+        chunk_count += 1
+        lines = regions.copy()
 
+        # if has pad, add lines for padded region
         if 'pad' in name:
             name.split('pad')
             pad5_length = int(name.split('pad')[0].split("_")[-1])
@@ -766,83 +811,88 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
             lines.extend(new_lines)
         else:
             new_lines = []
+        pad_lines.append(new_lines)
+
+        # renumber mutations because of 5' additions from the desired sequence
+        mutations = _get_mutations_from_name(seq_rec.name)
+        mutations = [x+len(seq5)+pad5_length for x in mutations]
+        muts.append(mutations)
+
+        # search barcodes until find one with correct structure predicted
         while not uid_good:
+
+            # get barcode, get new if barcode already used
             uid = all_uids[current_uid].seq
-            if used_barcodes is not None:
-                while str(uid) in used_barcodes:
-                    print('is true sometimes TEST')
-                    current_uid += 1
-                    uid = all_uids[current_uid].seq
+            while str(uid) in used_barcodes:
+                current_uid += 1
+                uid = all_uids[current_uid].seq
 
+            # create full sequence
             full_seq = f'{seq5}{seq}{uid}{seq3}'
-            current_uid += 1
 
-            prob_factor = 0.9**(1+(seq_count//num_barcode_before_reduce))
+            # if have looped through enough times reduce probability thresholds
+            porp = (1-(percent_reduce_prob/100))
+            prob_factor = porp**(1 + (seq_count // num_barcode_before_reduce))
             if seq_count//num_barcode_before_reduce == 0 and seq_count != 0:
                 print(f'For {seq}, failed to find barcode from {seq_count} barcodes, reducing (increasing for max prob) probabilities needed by a factor of {prob_factor}.')
 
-            if save_image_folder is not None:
-
-                if random() < save_bpp_fig:
-                    uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
-                                                            epsilon_interaction=epsilon_interaction,
-                                                            epsilon_punpaired=epsilon_punpaired, epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                            epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
-                                                            lines=lines, prob_factor=prob_factor,
-                                                            save_image=f'{save_image_folder}/{name}.png')
-                else:
-                    uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
-                                                            epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired,
-                                                            epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                            epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
-                                                            prob_factor=prob_factor)
+            # check if structure correct, save picture if specified and chance has it
+            if (save_image_folder is not None) and (random() < save_bpp_fig):
+                save_image = f'{save_image_folder}/{name}.png'
+                plot_lines = lines
             else:
-                uid_good, p_unpaired = check_struct_bpp(full_seq, region_unpaired, region_paired_A, region_paired_B, regionA, regionB,
-                                                        epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired,
-                                                        epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                        epsilon_paired=epsilon_paired, epsilon_avg_paired=epsilon_avg_paired,
-                                                        prob_factor=prob_factor)
+                save_image, plot_lines = None, None
+            uid_good, p_un = check_struct_bpp(full_seq, region_unpaired,
+                                              region_paired_A, region_paired_B,
+                                              regionA, regionB,
+                                              epsilon_interaction=epsilon_interaction,
+                                              epsilon_punpaired=epsilon_punpaired,
+                                              epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                              epsilon_paired=epsilon_paired,
+                                              epsilon_avg_paired=epsilon_avg_paired,
+                                              prob_factor=prob_factor,
+                                              lines=lines,
+                                              save_image=f'{save_image_folder}/{name}.png')
+
+            # if barcode is incorrect structure loop through again
             if not uid_good:
-                rejected_uids.append(all_uids[current_uid-1])
+                rejected_uids.append(all_uids[current_uid])
                 seq_count += 1
+            current_uid += 1
+
+            # if looped through all barcodes, go back to previously rejected barcodes and continue loop
             if current_uid == len(all_uids):
                 all_uids = rejected_uids
-                current_uid = 0
-                rejected_uids = []
+                current_uid, rejected_uids = 0, []
 
-        mutations = [x+len(seq5)+pad5_length for x in mutations]
-        muts.append(mutations)
-        pad_lines.append(new_lines)
+        # once found barcode add its sequence and probability unpaired to list
         seqs_for_labeling.append(full_seq)
         all_full_seqs.append(SeqIO.SeqRecord(Seq.Seq(full_seq), name, '', ''))
-        p_unpaireds[name] = p_unpaired
+        p_unpaireds[name] = p_un
+
+        # when processed enough sequences
+        # save probability unpaired figures and reset parameters
         if ((save_image_folder is not None) and
                 (chunk_count == punpaired_chunk_size)):
-            plot_punpaired(p_unpaireds,
-                           [i if i % 10 == 0 else '' for i in range(
-                               len(seqs_for_labeling[0]))],
+            plot_punpaired(p_unpaireds, pun_xlabel,
                            seqs_for_labeling, muts,
-                           [len(seq5), len(seq5)+len(seq), len(seq5) +
-                            len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)],
-                           pad_lines,
+                           regions, pad_lines,
                            f'{save_image_folder}/all_p_unpaired{image_count}.png')
-
-            chunk_count = 0
-            image_count += 1
-            p_unpaireds = {}
+            chunk_count, p_unpaireds = 0, {}
             pad_lines, seqs_for_labeling, muts = [], [], []
+            image_count += 1
+
+    # save left over probability unpaired figures
+    if save_image_folder is not None and len(p_unpaireds) != 0:
+        plot_punpaired(p_unpaireds, pun_xlabel,
+                       seqs_for_labeling, muts,
+                       regions, pad_lines,
+                       f'{save_image_folder}/all_p_unpaired{image_count}.png')
+    # save
     if out_fasta is not None:
         SeqIO.write(all_full_seqs, out_fasta, "fasta")
         print(f'Saved all full sequences to {out_fasta}.')
-    if save_image_folder is not None and len(p_unpaired) != 0:
-        plot_punpaired(p_unpaireds,
-                       [i if i % 10 == 0 else '' for i in range(
-                           len(seqs_for_labeling[0]))],
-                       seqs_for_labeling, muts,
-                       [len(seq5), len(seq5)+len(seq), len(seq5) +
-                        len(seq)+len(loop)+num5hang+num5polyA+(2*num_bp)],
-                       pad_lines,
-                       f'{save_image_folder}/all_p_unpaired.png')
+
     return all_full_seqs
 
 
@@ -1179,7 +1229,7 @@ def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
         # get number base pairs and length of hang
         num_bp = (pad_length-len(loop)-min_hang)//2
         num_hang = pad_length-len(loop)-(2*num_bp)
-        
+
         # for 5' should be on 3' ((((....))))....
         if side == "5'":
             barcodes = get_all_barcodes(num_bp=num_bp, num3hang=num_hang,
@@ -1192,10 +1242,10 @@ def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
 
         else:
             print("ERROR side must be 5' or 3'")
-        
+
         return barcodes, num_bp, num_hang, len(loop)
 
-    
+
 def get_used_barcodes(fasta, start, end):
     '''
     from a fasta file return all sequences between start and end inclusive
