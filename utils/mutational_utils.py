@@ -411,23 +411,40 @@ def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None):
 ###############################################################################
 
 
-def add_known_pads(fasta, out_fasta, pad5_dict, pad3_dict):
+def add_known_pads(fasta, pad5_dict, pad3_dict, out_fasta=None):
+    '''
+    From fasta prepend and append given sequences
+
+    Args:
+        fasta (str): fasta file containing sequence to get mutants of
+        pad5_dict (dict int:str): sequence length : pad to add on 5'
+        pad3_dict (dict int:str): sequence length : pad to add on 3'
+        out_fasta (str): if specified, save mutants to fasta (default None)
+
+    Returns:
+        list of SeqRecord with pads added
+        if out_fasta specified, also saves these to fasta file naming added _#pad# where numbers are length of pad
     '''
 
-    '''
-
+    # get all sequences and initialize
     all_WT = list(SeqIO.parse(fasta, "fasta"))
     all_seqs = []
+
     for record in all_WT:
         seq = _get_dna_from_SeqRecord(record)
 
+        # get pad for this length
         pad5 = pad5_dict[len(seq)]
         pad3 = pad3_dict[len(seq)]
         name = f' {record.id}_{len(pad5)}pad{len(pad3)}'
         new_seq = SeqIO.SeqRecord(Seq.Seq(pad5+seq+pad3), name, '', '')
         all_seqs.append(new_seq)
-    SeqIO.write(all_seqs, out_fasta, "fasta")
-    print(f'Saved all with correct constant pad added to {out_fasta}.')
+    
+    # save file
+    if out_fasta is not None:
+        SeqIO.write(all_seqs, out_fasta, "fasta")
+        print(f'Saved all with correct constant pad added to {out_fasta}.')
+    return all_seqs
 
 
 def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
@@ -437,6 +454,7 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
 
     '''
 
+    # TODO
     # probably should add ability to randomly generate but this
     # is fast enough for these small barcode aka get_random_barcode
     print("Getting all possible barcodes.")
@@ -466,40 +484,6 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
         SeqIO.write(all_barcodes, out_fasta, "fasta")
         print(f'Saved all barcodes to {out_fasta}.')
     return all_barcodes
-
-
-def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
-                   min_hang=3, bases=BASES):
-    '''
-
-    '''
-
-    if side == "5'":
-        # (((....)))....
-        # for things that would have <4bp just get random seq
-        if pad_length < 15:
-            barcodes = _get_all_rand_seq(pad_length, bases)
-            return barcodes, 0, 0, pad_length
-        else:
-            num_bp = (pad_length-len(loop)-min_hang)//2
-            num_hang = pad_length-len(loop)-(2*num_bp)
-            barcodes = get_all_barcodes(num_bp=num_bp, num3hang=num_hang,
-                                        loop=loop, bases=bases)
-            return barcodes, num_bp, num_hang, len(loop)
-    elif side == "3'":
-        # ....(((....)))
-        if pad_length < 15:
-            barcodes = _get_all_rand_seq(pad_length, bases)
-            return barcodes, 0, 0, pad_length
-        else:
-            num_bp = (pad_length-len(loop)-min_hang)//2
-            num_hang = pad_length-len(loop)-(2*num_bp)
-            barcodes = get_all_barcodes(num_bp=num_bp, num5hang=num_hang,
-                                        loop=loop, bases=bases)
-            return barcodes, num_bp, num_hang, len(loop)
-
-    else:
-        print("ERROR side must be 5' or 3'")
 
 
 def add_pad(fasta, out_fasta, bases=BASES, padding_type='SL_same_per_length',
@@ -1161,6 +1145,57 @@ def _get_mutations_from_name(name):
     return nucs
 
 
+def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
+                   min_hang=3, bases=BASES, min_stem_length=4):
+    '''
+    Get all possible stems for pad
+
+    Args:
+        pad_length (int): the total length of desired pad
+        side (str): either 5' or 3' pad
+        loop (str): sequence of the loop in stem
+        min_hang (int): the minimum length of sequence between pad and sequence of interest, 
+            will only min_hang or min_hang+1 (default 3)
+        bases (list): list of possible bases we can use
+        min_stem_length (int): minimum stem length to allow 
+            if not long enough to form this stem, return random sequence (default 4)
+
+    Returns:
+        list of barcodes
+        number of base-pairs in stem
+        number of hanging nucleotides between stem and sequence of interest
+        number of nucleotides in loop
+    '''
+
+    # TODO probably let specifiy hang has to be polyA
+
+    # for things too short for stem return random sequence
+    min_pad_for_stem = min_stem_length*2 + len(loop) + min_hang
+    if pad_length < min_pad_for_stem:
+        barcodes = _get_all_rand_seq(pad_length, bases)
+        return barcodes, 0, 0, pad_length
+
+    else:
+        # get number base pairs and length of hang
+        num_bp = (pad_length-len(loop)-min_hang)//2
+        num_hang = pad_length-len(loop)-(2*num_bp)
+        
+        # for 5' should be on 3' ((((....))))....
+        if side == "5'":
+            barcodes = get_all_barcodes(num_bp=num_bp, num3hang=num_hang,
+                                        loop=loop, bases=bases)
+
+        # for 3' should be on 5' ....((((....))))
+        elif side == "3'":
+            barcodes = get_all_barcodes(num_bp=num_bp, num5hang=num_hang,
+                                        loop=loop, bases=bases)
+
+        else:
+            print("ERROR side must be 5' or 3'")
+        
+        return barcodes, num_bp, num_hang, len(loop)
+
+    
 def get_used_barcodes(fasta, start, end):
     '''
     from a fasta file return all sequences between start and end inclusive
