@@ -1238,8 +1238,8 @@ def _get_5_3_split(length, pad_side='both'):
         pad_5_len, pad_3_len = length_to_add, 0
     elif pad_side == "3'":
         pad_5_len, pad_3_len = 0, length_to_add
-    elif pad_side == 'both'
-       elif length < 15 and length % 2 == 0:
+    elif pad_side == 'both':
+        if length < 15 and length % 2 == 0:
             pad_5_len, pad_3_len = length//2, length//2
         elif length < 15:
             pad_5_len, pad_3_len = length//2, 1+(length//2)
