@@ -165,104 +165,6 @@ def get_bp_set_from_dotbracket(dotbracket):
 
     return convert_dotbracket_to_bp_list(dotbracket)
 
-###############################################################################
-# helpers
-###############################################################################
-
-
-def _get_reverse_complement(seq):
-
-    '''
-    Return reverse complement of sequence, converts to DNA
-    '''
-
-    dna = _get_dna_from_SeqRecord(seq)
-    reverse = dna[::-1]
-    complements = {'T': 'A', 'A': 'T', 'C': 'G', 'G': 'C'}
-    reverse_complement = ''.join([complements.get(s, s) for s in reverse])
-    return reverse_complement
-
-def _remove_seqs_in_other_list(seqsA, seqsB):
-
-    '''
-    Given 2 lists of SeqRecord, remove any SeqRecord in A
-    that has same name as SeqRecord in B. 
-    DOES NOT check seq itself!
-    '''
-
-    names = [n.name for n in seqsB]
-    good_seqs = []
-    for seq_rec in seqsA:
-        if seq_rec.name not in names:
-            good_seqs.append(seq_rec)
-    return good_seqs
-
-
-def _get_dna_from_SeqRecord(seqrecord):
-    if type(seqrecord)==str:
-        dna = seqrecord.upper().replace("U", "T")
-    else:
-        dna = str(seqrecord.seq).upper().replace("U", "T")
-    return dna
-
-
-def _get_all_rand_seq(length, bases=BASES):
-    all_seq = []
-    for x in product(bases, repeat=length):
-        seq = ''.join(x)
-        seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), f' {seq}', '', '')
-        all_seq.append(seq_rec)
-    return all_seq
-
-
-def _get_5_3_split(length):
-    # 4+6+4+6 20
-    if length < 15 and length % 2 == 0:
-        pad_5_len, pad_3_len = length//2, length//2
-    elif length < 15:
-        pad_5_len, pad_3_len = length//2, 1+(length//2)
-    elif length < 20:
-        pad_5_len, pad_3_len = 0, length
-    elif length < 32:
-        pad_5_len, pad_3_len = length-20, 20
-    elif length % 2 == 0:
-        pad_5_len, pad_3_len = length//2, length//2
-    else:
-        pad_5_len, pad_3_len = length//2, 1+(length//2)
-    return pad_5_len, pad_3_len
-
-
-def _get_mutations_from_name(name):
-
-    '''
-    
-    '''
-
-    nucs = []
-    for name_part in name.split('_'):
-        if len(name_part) > 2:
-            if name_part[-2] == '-':
-                nucnum_A, nuc_B = name_part.split('-')
-                num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
-                if nuc_A in BASES and nuc_B in BASES:
-                    nucs.append(int(num))
-    return nucs
-
-
-def get_used_barcodes(fasta, start, end):
-    # TODO the add barcodes code should have an  option of
-    # fasta file with barcodes to not use, start, end
-    # and this code should move to helper?
-    # inclusive
-    all_seqs = list(SeqIO.parse(fasta, "fasta"))
-    barcodes = []
-    for record in all_seqs:
-        seq = _get_dna_from_SeqRecord(record)
-
-        barcode = seq[start:end+1]
-        barcodes.append(str(seq))
-    return barcodes
-
 
 ###############################################################################
 # get desired sequences
@@ -926,6 +828,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 # check structures
 ###############################################################################
 
+
 def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
                      region_paired_B=None,
                      regionA=None, regionB=None,
@@ -936,11 +839,42 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
                      epsilon_avg_paired=MINAVGPROB_PAIRED,
                      prob_factor=1.0,
                      lines=None, save_image=None):
+    
+    '''
+    Check if sequence as a base-pair-probaility matrix of desired structure
 
+    Args:
+        seq (str or SeqRecord): sequence
+        region_unpaired (list ints): list of indices for positions in the sequence that need to be unpaired
+        region_paired_A (list ints): list of indices for positions in the sequence that need to be paired, 
+            specifically ordered to pair with indices in region_paired_B
+        region_paired_B (list ints): list of indices for positions in the sequence that need to be paired, 
+            specifically ordered to pair with indices in region_paired_A
+        regionA (list ints): list of indices for positions in the sequence that need to not interact with regionB
+        regionB (list ints): list of indices for positions in the sequence that need to not interact with regionA
+        epsilon_interaction (float): Maximum base-pair-probability for 2 regions to be considered noninteracting
+        epsilon_punpaired (float): Minimum probability unpaired for region to be unpaired
+        epsilon_avg_punpaired (float): Average probability unpaired for region to be unpaired
+        epsilon_paired (float): Minimum base-pair-probability for 2 regions to be considered paired
+        epsilon_avg_paired (float): Average base-pair-probability for 2 regions to be considered paired
+        prob_factor (float): the factor to multiply probabilities by (divide for epsilon_interaction) (default 1.0)
+        save_image (str): if specified save an image of bpp to this file (default None)
+        lines (list ints): list of sequences positions to draw lines in bpp figure (default None)
+
+    Returns:
+        bool if structure is ok
+        array of the probability each nucleotide is unpaired
+
+    Verbose possibilities:
+        print(interaction_check.max(),punpaired_check.min())#paired_check.min(),
+    '''
+
+    # get base-pair probability matrix and probability unpaired
     bpp = bpps(_get_dna_from_SeqRecord(seq),
                package='eternafold')
     p_unpaired = 1-bpp.sum(axis=0)
 
+    # for regions specified, check if structure is ok
     bad_struct = False
     if region_unpaired is not None:
         punpaired_check = p_unpaired[region_unpaired]
@@ -961,10 +895,11 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
         bad_struct = bad_struct or (
             paired_check.min() < epsilon_paired*prob_factor)
 
-    # print(interaction_check.max(),punpaired_check.min())#paired_check.min(),
+    # if bad structure return False
     if bad_struct:
         return False, p_unpaired
 
+    # otherwise, save image if needed and return True
     else:
         if save_image is not None:
             plot_bpp(bpp, seq, lines, save_image)
@@ -1096,6 +1031,105 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image
     # save
     plt.savefig(save_image, bbox_inches='tight', dpi=dpi)
     plt.close()
+
+
+###############################################################################
+# helpers
+###############################################################################
+
+
+def _get_reverse_complement(seq):
+
+    '''
+    Return reverse complement of sequence, converts to DNA
+    '''
+
+    dna = _get_dna_from_SeqRecord(seq)
+    reverse = dna[::-1]
+    complements = {'T': 'A', 'A': 'T', 'C': 'G', 'G': 'C'}
+    reverse_complement = ''.join([complements.get(s, s) for s in reverse])
+    return reverse_complement
+
+def _remove_seqs_in_other_list(seqsA, seqsB):
+
+    '''
+    Given 2 lists of SeqRecord, remove any SeqRecord in A
+    that has same name as SeqRecord in B. 
+    DOES NOT check seq itself!
+    '''
+
+    names = [n.name for n in seqsB]
+    good_seqs = []
+    for seq_rec in seqsA:
+        if seq_rec.name not in names:
+            good_seqs.append(seq_rec)
+    return good_seqs
+
+
+def _get_dna_from_SeqRecord(seqrecord):
+    if type(seqrecord)==str:
+        dna = seqrecord.upper().replace("U", "T")
+    else:
+        dna = str(seqrecord.seq).upper().replace("U", "T")
+    return dna
+
+
+def _get_all_rand_seq(length, bases=BASES):
+    all_seq = []
+    for x in product(bases, repeat=length):
+        seq = ''.join(x)
+        seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), f' {seq}', '', '')
+        all_seq.append(seq_rec)
+    return all_seq
+
+
+def _get_5_3_split(length):
+    # 4+6+4+6 20
+    if length < 15 and length % 2 == 0:
+        pad_5_len, pad_3_len = length//2, length//2
+    elif length < 15:
+        pad_5_len, pad_3_len = length//2, 1+(length//2)
+    elif length < 20:
+        pad_5_len, pad_3_len = 0, length
+    elif length < 32:
+        pad_5_len, pad_3_len = length-20, 20
+    elif length % 2 == 0:
+        pad_5_len, pad_3_len = length//2, length//2
+    else:
+        pad_5_len, pad_3_len = length//2, 1+(length//2)
+    return pad_5_len, pad_3_len
+
+
+def _get_mutations_from_name(name):
+
+    '''
+    
+    '''
+
+    nucs = []
+    for name_part in name.split('_'):
+        if len(name_part) > 2:
+            if name_part[-2] == '-':
+                nucnum_A, nuc_B = name_part.split('-')
+                num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
+                if nuc_A in BASES and nuc_B in BASES:
+                    nucs.append(int(num))
+    return nucs
+
+
+def get_used_barcodes(fasta, start, end):
+    # TODO the add barcodes code should have an  option of
+    # fasta file with barcodes to not use, start, end
+    # and this code should move to helper?
+    # inclusive
+    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    barcodes = []
+    for record in all_seqs:
+        seq = _get_dna_from_SeqRecord(record)
+
+        barcode = seq[start:end+1]
+        barcodes.append(str(seq))
+    return barcodes
 
 
 ###############################################################################
