@@ -162,7 +162,7 @@ def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
 def get_bp_set_from_dotbracket(dotbracket):
     '''
     Given a dotbracket structure, return a list of base-pairs
-    IGNORES pseudoknots TODO
+    IGNORES pseudoknots 
     '''
 
     return convert_dotbracket_to_bp_list(dotbracket)
@@ -353,7 +353,8 @@ def get_all_double_mutants(fasta, regionAs, regionBs, out_fasta=None, bases=BASE
     return all_double_mutants
 
 
-def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None):
+def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None,
+                           wfc_base_pairs=['AT', 'TA', 'CG', 'GC']):
     '''
     Get all watson-crick-franklin rescue mutants between specified basepairs for all sequences in a fasta file.
 
@@ -361,6 +362,8 @@ def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None):
         fasta (str): fasta file containing sequence to get mutants of
         bp_sets (list of lists of pairs): for each sequence, a list of basepairs as a tuple or list of int
         out_fasta (str): if specified, save mutants to fasta (default None)
+        wfc_base_pairs (list): list of potential base pairs to rescue with 
+            (default ['AT', 'TA', 'CG', 'GC'])
 
     Returns:
         list of SeqRecord with the mutants
@@ -370,9 +373,6 @@ def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None):
         Indexing from 0 on mutants are ordered by nucleotide number.
         Generally, total is 3*numbps
     '''
-
-    # TODO can allow people to specify
-    wfc_base_pairs = ['AT', 'TA', 'CG', 'GC']
 
     print("Getting all rescue mutants.")
 
@@ -406,6 +406,7 @@ def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None):
                     new_mut = SeqIO.SeqRecord(
                         Seq.Seq(new_seq), name, '', '')
                     all_rescue_mutants.append(new_mut)
+
     # save file
     if out_fasta is not None:
         SeqIO.write(all_rescue_mutants, out_fasta, "fasta")
@@ -461,38 +462,52 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
                      polyA5=0, polyA3=0,
                      loop=TETRALOOP, bases=BASES):
     '''
+    Return all barcodes of specified structure
+
+    Args:
+        out_fasta (str): if specified, save mutants to fasta (default None)
+        num_bp (int): length of stem (default 8)
+        num5hang (int): length of random 5' hang (default 0)
+        num3hang (int): length of random 3' hang (default 0)
+        polyA5 (int): length of polyA 5' hange (placed before random) (default 0)
+        polyA3 (int): length of polyA 3' hange (placed after random) (default 0)
+        loop (str): sequence of loop
+        bases (list): list of bases that can be used
+
+    Returns:
+        list of SeqRecord of all possible barcodes
+        if out_fasta specified, also saves these to fasta file
 
     '''
 
-    # TODO
-    # probably should add ability to randomly generate but this
-    # is fast enough for these small barcode aka get_random_barcode
     print("Getting all possible barcodes.")
     all_barcodes = []
-    for x in product(bases, repeat=num_bp+num5hang+num3hang):
+
+    # get all possible combinations of bases for random/barcode regions
+    for x in product(bases, repeat=num5hang+num_bp+num3hang):
         uid = ''.join(x)
 
-        if num5hang+num3hang != 0:
-            hang5 = uid[:num5hang]
-            if num3hang == 0:
-                hang3 = ''
-                uid = uid[num5hang:]
-            else:
-                hang3 = uid[-num3hang:]
-                uid = uid[num5hang:-num3hang]
-
-            seq = ("A"*polyA5)+hang5+uid+loop + \
-                _get_reverse_complement(uid)+hang3+("A"*polyA3)
-            seq_rec = SeqIO.SeqRecord(Seq.Seq(seq),
-                                      f' {uid}_{hang5}hang{hang3}', '', '')
+        # split barcode in stem and hang regions
+        hang5 = uid[:num5hang]
+        if num3hang == 0:
+            hang3 = ''
+            stemA = uid[num5hang:]
         else:
-            seq = ("A"*polyA5)+uid+loop + \
-                _get_reverse_complement(uid)+("A"*polyA3)
-            seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), f' {uid}', '', '')
+            hang3 = uid[-num3hang:]
+            stemA = uid[num5hang:-num3hang]
+        stemB = _get_reverse_complement(uid)
+
+        # put all barcode parts together
+        seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)
+        name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
+        seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
         all_barcodes.append(seq_rec)
+
+    # save
     if out_fasta is not None:
         SeqIO.write(all_barcodes, out_fasta, "fasta")
         print(f'Saved all barcodes to {out_fasta}.')
+
     return all_barcodes
 
 
@@ -508,7 +523,9 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
     # min_length_stem max_length_stem hang_length polyA hand length
     # different, per_legnth, same
     # min num samples, but also min proportion good 0.95 --> round up
-
+    # TODO
+    # probably should add ability to randomly generate but this
+    # is fast enough for these small barcode aka get_random_barcode
 
     Given a fasta of sequence pad all sequence to the same length
 
@@ -551,7 +568,8 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
     selected_sec = []
     max_bad_structs = {}
     for len_seq, seq_group in seq_by_length.items():
-        number_to_select = min(len(seq_group), max(min_num_samples, len(seq_group)*0.01))
+        number_to_select = min(len(seq_group), max(
+            min_num_samples, len(seq_group)*0.01))
         selected_sec.append(sample(seq_group, k=number_to_select))
         max_bad_structs[len_seq] = floor(max_prop_bad*number_to_select)
         print(f'Pad for length {len_seq} search using {number_to_select} sequences for structure check for each length.')
@@ -596,9 +614,8 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
 
             # numbp_loop_numbp_hang_seq_hang_numbp_loop_numbp
             part_lengths = [num_bp5, loop_len5, num_bp5, num_hang5,
-                len_group, num_hang3, num_bp3, loop_len3, num_bp3]
+                            len_group, num_hang3, num_bp3, loop_len3, num_bp3]
 
-            
             region_unpaired = list(
                 range(sum(part_lengths[:1]), sum(part_lengths[:2])))
             region_unpaired.extend(
@@ -703,7 +720,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                 pad_5n_len = pad_5n_new
             if pad_3n_new > pad_3n_len:
                 pad_3n_len = pad_3n_new
-        
+
         # selected_sec = list(chain(*selected_sec))
 
         # loop until find a good pad
@@ -723,10 +740,10 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                     # if i%10==0 and i!=0:
                     #    print(i)
 
-                    
                     if length_to_add != 0:
                         # TODO _get_5_3_split
-                        pad_5n, pad_3n = _get_5_3_split(length_to_add, pad_side)
+                        pad_5n, pad_3n = _get_5_3_split(
+                            length_to_add, pad_side)
 
                         full_seq = pad5[-pad_5n:] + \
                             _get_dna_from_SeqRecord(seq) + pad3[:pad_3n]
@@ -1052,7 +1069,7 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
 ###############################################################################
 
 
-def plot_bpp(bpp, seq, save_image, lines = [], cmap='gist_heat_r',
+def plot_bpp(bpp, seq, save_image, lines=[], cmap='gist_heat_r',
              scale_factor=0.12, line_color='grey', xyticks_size=8, dpi=100,
              freq_report_nuc_number=10):
     '''
@@ -1174,6 +1191,18 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image
     plt.close()
 
 
+def plot_all_bpp_from_fasta(fasta, save_image_folder):
+    '''
+    from a fasta file, just plot all bpps
+    '''
+    seqs = list(SeqIO.parse(fasta, "fasta"))
+    for seq_rec in tqdm(seqs):
+        seq = _get_dna_from_SeqRecord(seq_rec)
+        bpp = bpps(seq, package='eternafold')
+        save_image = f'{save_image_folder}/{seq_rec.name}.png'
+        plot_bpp(bpp, seq, save_image)
+
+
 ###############################################################################
 # helpers
 ###############################################################################
@@ -1229,6 +1258,47 @@ def _get_all_rand_seq(length, bases=BASES):
         seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), f' {seq}', '', '')
         all_seq.append(seq_rec)
     return all_seq
+
+
+def _get_random_barcode(num_bp=8, num5hang=0, num3hang=0,
+                     polyA5=0, polyA3=0,
+                     loop=TETRALOOP, bases=BASES):
+    '''
+    Return random barcodes of specified structure
+
+    Args:
+        num_bp (int): length of stem (default 8)
+        num5hang (int): length of random 5' hang (default 0)
+        num3hang (int): length of random 3' hang (default 0)
+        polyA5 (int): length of polyA 5' hange (placed before random) (default 0)
+        polyA3 (int): length of polyA 3' hange (placed after random) (default 0)
+        loop (str): sequence of loop
+        bases (list): list of bases that can be used
+
+    Returns:
+        SeqRecord of a random barcode
+
+    '''
+
+    # get random combinations of bases for random/barcode regions
+    uid = ''.join(choices(bases, k=num5hang+num_bp+num3hang))
+
+    # split barcode in stem and hang regions
+    hang5 = uid[:num5hang]
+    if num3hang == 0:
+        hang3 = ''
+        stemA = uid[num5hang:]
+    else:
+        hang3 = uid[-num3hang:]
+        stemA = uid[num5hang:-num3hang]
+    stemB = _get_reverse_complement(uid)
+
+    # put all barcode parts together
+    seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)
+    name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
+    seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
+
+    return seq_rec
 
 
 def _get_5_3_split(length, pad_side='both'):
@@ -1375,13 +1445,6 @@ def get_regions_for_doublemut(doublemuts):
 # UNDER CONSTRUCTION
 ###############################################################################
 
-def plot_all_bpp_from_fasta(fasta, save_image_folder):
-    seqs = list(SeqIO.parse(fasta, "fasta"))
-    for seq_rec in tqdm(seqs):
-        seq = _get_dna_from_SeqRecord(seq_rec)
-        bpp = bpps(seq,package='eternafold')
-        save_image = f'{save_image_folder}/{seq_rec.name}.png'
-        plot_bpp(bpp, seq, save_image)
 
 def plot_punpaired_from_fasta(fasta, save_image):
     # NOT well tested
