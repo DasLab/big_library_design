@@ -64,6 +64,8 @@ window.add_argument('--step', type=int, default=10,
                     help='The step size of the sliding window.')
 window.add_argument('--circularize', action='store_true',
                     help="Whether to circularize the sequence (at 3' end, don't stop but loop back to 5') or not.")
+window.add_argument('--prop_windows_keep', type=float,default=1.0,
+                    help='The proportion of windoes to keep, others not added to library.')
 
 m2seq = parser.add_argument_group('padding for: m2seq or just_library when length not equal')
 m2seq.add_argument('--share_pad', type=str, default='same_length', help='If there are sequencees of multiple lengths, to obtain a libarary of equal length some sequences will be padded. This specifies which sequence share the same pad, all, none or same_length sequences.')
@@ -126,6 +128,8 @@ elif args.window:
     get_windows(args.input_fasta, args.length, args.step,
                 f'{args.output_prefix}_windowed.fasta',
                 circularize=args.circularize)
+    if args.prop_windows_keep != 1:
+        randomly_select_seqs(f'{args.output_prefix}_windowed.fasta', f'{args.output_prefix}_windowed_rejected.fasta', args.prop_windows_keep)
     add_fixed_seq_and_barcode(f'{args.output_prefix}_windowed.fasta',
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,

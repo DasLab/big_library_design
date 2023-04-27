@@ -97,24 +97,31 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
         print('file_format not supported, available: custom_array twist agilent')
 
 
-def randomly_select_seqs(fasta, out_file, N):
+def randomly_select_seqs(fasta, reject_file, prop):
     '''
     Given a fasta randomly select N sequences and save to new fasta
     '''
 
     all_seqs = list(SeqIO.parse(fasta, "fasta"))
-    if len(seqs) > N:
-        all_seqs = sample(all_seqs, N)
+    N = round(len(all_seqs)*prop)
 
-        SeqIO.write(all_seqs, out_fasta, "fasta")
-
-        print(f'Written {out_file} for with {N} selected sequences.')
+    if len(all_seqs) > N:
+        seq_indices = list(range(len(all_seqs)))
+        shuffle(seq_indices)
+        pass_ind = seq_indices[:N]
+        rejected_ind = seq_indices[N:]
+        pass_ind.sort()
+        rejected_ind.sort()
+        pass_seqs = [seq for i,seq in enumerate(all_seqs) if i in pass_ind]
+        rejected_seqs = [seq for i,seq in enumerate(all_seqs) if i in rejected_ind]
+        SeqIO.write(rejected_seqs, reject_file, "fasta")
+        SeqIO.write(pass_seqs, fasta, "fasta")
+        print(f'Written {fasta} for with {N} selected sequences and {reject_file} with {len(all_seqs)-N}.')
 
     else:
 
         SeqIO.write(all_seqs, out_fasta, "fasta")
-
-        print(f'WARNING: Written {out_file} but {fasta} had less than {N} sequences so none removed.')
+        print(f'WARNING: Written {fasta} but had less than {N} sequences so none removed.')
 
 
 def get_same_length(fasta):
@@ -124,21 +131,6 @@ def get_same_length(fasta):
 
     seqs = list(SeqIO.parse(fasta, "fasta"))
     return _get_same_length(seqs)[0]
-
-
-def _get_same_length(seqs):
-    '''
-    Checks if all sequences in a given fasta are the same length
-    '''
-
-    length = len(seqs[0].seq)
-
-    for seq_rec in seqs[1:]:
-        len_seq = len(seq_rec)
-        if length != len_seq:
-            return False, np.nan
-
-    return True, length
 
 
 def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
@@ -1501,6 +1493,21 @@ def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
             print("ERROR side must be 5' or 3'")
 
         return barcodes, num_bp, num_hang, len(loop)
+
+
+def _get_same_length(seqs):
+    '''
+    Checks if all sequences in a given fasta are the same length
+    '''
+
+    length = len(seqs[0].seq)
+
+    for seq_rec in seqs[1:]:
+        len_seq = len(seq_rec)
+        if length != len_seq:
+            return False, np.nan
+
+    return True, length
 
 
 def get_regions_for_doublemut(doublemuts):
