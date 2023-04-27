@@ -222,7 +222,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
         for i in range(0, len(seq), window_slide):
 
             # when we hit the end of sequence
-            if i+window_length > len(seq):
+            if i+window_length >= len(seq):
 
                 # add last window
                 if not circularize:
@@ -536,6 +536,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
             loop=TETRALOOP, min_hang=3, min_num_samples=30,
             max_prop_bad=0.05, pad_side='both'):
     '''
+    # WARNING IN PROCESS OF REFACTORING
     # min_length_stem max_length_stem hang_length polyA hand length
     # different, per_legnth, same
     # min num samples, but also min proportion good 0.95 --> round up
@@ -886,6 +887,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     region_paired_B = list(range(regions[2]-num_bp, regions[2]))[::-1]
     pun_xlabel = [i if i % 10 == 0 else '' for i in range(seq_len)]
     porp_reduce = (1-(percent_reduce_prob/100))
+    
 
     print("Adding 5', barcode, 3'.")
 
@@ -896,10 +898,11 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         name = seq_rec.name+'_libraryready'
 
         # initialize values
-        uid_good = False
+        uid_good, mutate_polyA = False, False
         seq_count = {'unpaired':0,'paired':0,'interaction':0}
         chunk_count += 1
         lines = regions.copy()
+        num_barcode = num_barcode_before_reduce
 
         # if has pad, add lines for padded region
         if 'pad' in name:
@@ -927,17 +930,29 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                 current_uid += 1
                 uid = all_uids[current_uid].seq
 
-            # create full sequence
-            full_seq = f'{seq5}{seq}{uid}{seq3}'
-
             # if have looped through enough times reduce probability thresholds
             prob_factor = {}
             for type_error,count in seq_count.items():
-                mutiplier = (count // num_barcode_before_reduce)
+                mutiplier = (count // num_barcode)
                 prob_factor[type_error] = porp_reduce**mutiplier
-                if (count-mutiplier)%num_barcode_before_reduce == 0 and count != 0:
+
+                if (count-mutiplier)%num_barcode == 0 and count != 0:
                     seq_count[type_error] += 1
                     print(f'For {name}, failed to find barcode from {count-mutiplier} barcodes because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
+                # when this is like 3x if there is a ployA allow this to mutate -- rand, don't forget change name!
+                if mutiplier >= 3 and num5polyA != 0 and not mutate_polyA:
+                    mutate_polyA = True
+                    seq_count={'unpaired':0,'paired':0,'interaction':0}
+                    num_barcode = num_barcode_before_reduce*3
+                    print(f'For {name}, failed to find barcodes now allowing polyA to be random sequence.')
+
+            # create full sequence
+            if mutate_polyA:
+                new_hang = _get_random_barcode(num_bp=0, num5hang=num5polyA,loop='').seq
+                # new_loop = _get_random_barcode(num_bp=0, num5hang=len(loop),loop='').seq
+                # uid = new_hang+uid[num5polyA:num5polyA+num_bp]+new_loop+uid[num5polyA+num_bp+len(loop):]
+                uid = new_hang+uid[num5polyA:]
+            full_seq = f'{seq5}{seq}{uid}{seq3}'
 
             # check if structure correct, save picture if specified and chance has it
             if (save_image_folder is not None) and (random() < save_bpp_fig):
@@ -1313,7 +1328,7 @@ def _get_random_barcode(num_bp=8, num5hang=0, num3hang=0,
     else:
         hang3 = uid[-num3hang:]
         stemA = uid[num5hang:-num3hang]
-    stemB = _get_reverse_complement(uid)
+    stemB = _get_reverse_complement(stemA)
 
     # put all barcode parts together
     seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)
