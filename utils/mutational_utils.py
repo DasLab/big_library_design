@@ -591,6 +591,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
         padded_seqs = []
 
         for seq_length, seqs in seq_by_length.items():
+            # for each length get the structure of the 3' and 5' pad
             pad_length = desired_len-seq_length
             structs, regions = _get_5_3_split(pad_length, hang, polyAhang,
                                               min_length_stem, max_length_stem,
@@ -610,6 +611,8 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                                            loop=structs["3"]['loop'])
                     pad5 = _get_dna_from_SeqRecord(pad5)
                     pad3 = _get_dna_from_SeqRecord(pad3)
+
+                    # get full sequence and check structure
                     full_seq = pad5+_get_dna_from_SeqRecord(seq)+pad3
                     full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}'
                     f_un, f_in, f_p, p_unpaired = check_struct_bpp(
@@ -622,6 +625,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                         epsilon_avg_paired=epsilon_avg_paired)
                     good_pad = (f_un + f_in + f_p == [])
 
+                # if pass add final sequence
                 padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
                                              full_seq_name, '', '')
                 padded_seqs.append(padded_seq)
@@ -733,6 +737,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
         good_pad = False
         seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
         while not good_pad:
+
             # get random pad
             pad5_full = ''
             pad3_full = ''
@@ -747,9 +752,10 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                                            loop=structs["3"]['loop']) + pad3_full
 
 
-            
+            # for all sequences
             for seqs in selected_sec:
                 bad_count = 0
+
                 # if tried enough relax the probability contstraints
                 prob_factor = {}
                 for type_error, count in seq_count.items():
@@ -759,10 +765,10 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                         seq_count[type_error] += 1
                         print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
 
+                # for each length get regions and cutoff of full pads
                 len_group = len(seqs[0].seq)
                 regions = regions_by_len[len_group]
                 cutoff = cutoff_by_len[len_group]
-
                 pad5 = _get_dna_from_SeqRecord(pad5_full[:cutoff[0]])
                 if cutoff[1] == 0:
                     pad3 = ''
@@ -774,8 +780,9 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                     #    print(i)
 
                     if len_group != desired_len:
-                        full_seq = pad5 + _get_dna_from_SeqRecord(seq) + pad3
 
+                        # get full sequence and check its structure
+                        full_seq = pad5 + _get_dna_from_SeqRecord(seq) + pad3
                         f_un, f_in, f_p, p_unpaired = check_struct_bpp(full_seq, regions['unpaired'], regions['pairedA'],
                         regions['pairedB'], regions['noninteractA'], regions['noninteractB'],
                         epsilon_interaction=epsilon_interaction,
@@ -959,7 +966,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                 if (count-mutiplier) % num_barcode == 0 and count != 0:
                     seq_count[type_error] += 1
                     print(f'For {name}, failed to find barcode from {count-mutiplier} barcodes because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
-                # when this is like 3x if there is a ployA allow this to mutate -- rand, don't forget change name!
+                # when this is 3x, if there is a ployA allow this to mutate
                 if mutiplier >= 3 and num5polyA != 0 and not mutate_polyA:
                     mutate_polyA = True
                     seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
@@ -970,7 +977,6 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
             if mutate_polyA:
                 new_hang = _get_random_barcode(
                     num_bp=0, num5hang=num5polyA, loop='').seq
-                # TODO is loop ever a problem, collect information on whether it is loop of hang that is problem??
                 # new_loop = _get_random_barcode(num_bp=0, num5hang=len(loop),loop='').seq
                 # uid = new_hang+uid[num5polyA:num5polyA+num_bp]+new_loop+uid[num5polyA+num_bp+len(loop):]
                 uid = new_hang+uid[num5polyA:]
@@ -1085,7 +1091,7 @@ def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
         array of the probability each nucleotide is unpaired
 
     Verbose possibilities:
-        print(interaction_check.max(),punpaired_check.min())#paired_check.min(),
+        print(interaction_check.max(),punpaired_check.min(),paired_check.min())
     '''
 
     # get base-pair probability matrix and probability unpaired
