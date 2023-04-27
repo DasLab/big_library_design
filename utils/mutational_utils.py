@@ -134,6 +134,7 @@ def _get_same_length(seqs):
     length = len(seqs[0].seq)
 
     for seq_rec in seqs[1:]:
+        len_seq = len(seq_rec)
         if length != len_seq:
             return False, np.nan
 
@@ -152,6 +153,21 @@ def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
     other_seqs = list(SeqIO.parse(other_fasta, "fasta"))
     good_seqs = _remove_seqs_in_other_list(all_seqs, other_seqs)
     SeqIO.write(good_seqs, out_file, "fasta")
+
+
+def get_used_barcodes(fasta, start, end):
+    '''
+    from a fasta file return all sequences between start and end inclusive
+    '''
+
+    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    barcodes = []
+    for record in all_seqs:
+        seq = _get_dna_from_SeqRecord(record)
+        # end is inclusive
+        barcode = seq[start:end+1]
+        barcodes.append(str(seq))
+    return barcodes
 
 
 ###############################################################################
@@ -754,7 +770,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                                               pad_5n+len(seq.seq)+pad_3n))
                         regionB = list(range(pad_5n, pad_5n+len(seq.seq)))
 
-                        good_pad, p_unpaired = check_struct_bpp(full_seq, region_unpaired=regionA,
+                        good_pad, p_unpaired = check_struct_bpp(full_seq, regions_unpaired=regionA,
                                                                 regionA=regionA, regionB=regionB,
                                                                 epsilon_interaction=epsilon_interaction, epsilon_punpaired=epsilon_punpaired,
                                                                 epsilon_avg_punpaired=epsilon_avg_punpaired,
@@ -833,10 +849,6 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         list of SeqRecord which are library ready
         if out_fasta specified, also saves these to fasta file, _libraryready appended to names
 
-    TODO function to just save all bpps given a fasta?
-    TODO for pad instead of having to pass all, have like 90% pass rate or something!!!
-    TODO let's actualyl number starting from 1
-    TODO let's actually number images with desired sequence at 1 ?
     '''
 
     # if image folder does not exist create it
@@ -851,11 +863,11 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     shuffle(all_uids)
 
     # read sequences, check all same length, and initialize variables
-    seqs = SeqIO.parse(fasta, "fasta")
+    seqs = list(SeqIO.parse(fasta, "fasta"))
     same_length, seq_len = _get_same_length(seqs)
     if not same_length:
         print("ERROR: sequences not all same length.")
-    all_full_seqs, p_unpaireds, rejected_uids = 0, [], {}, []
+    all_full_seqs, p_unpaireds, rejected_uids = [], {}, []
     pad_lines, new_lines, seqs_for_labeling, muts = [], [], [], []
     current_uid, chunk_count, image_count = 0, 0, 0
     seq5 = _get_dna_from_SeqRecord(seq5)
@@ -865,14 +877,15 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                len(seq5)+seq_len+num5hang+num5polyA+(2*num_bp)+len(loop)]
     regionA = list(range(regions[0], regions[1]))
     regionB = list(range(regions[1], regions[2]))
-    region_unpaired = list(range(regions[1],
-                                 regions[1]+num5hang+num5polyA))
-    region_unpaired.extend(list(range(regions[2]-num_bp-len(loop),
-                                      regions[2]-num_bp)))
+    region_unpaired = [list(range(regions[1],
+                                  regions[1]+num5hang+num5polyA)),
+                       list(range(regions[2]-num_bp-len(loop),
+                                  regions[2]-num_bp))]
     region_paired_A = list(range(regions[1]+num5hang+num5polyA,
                                  regions[2]-num_bp-len(loop)))
     region_paired_B = list(range(regions[2]-num_bp, regions[2]))[::-1]
     pun_xlabel = [i if i % 10 == 0 else '' for i in range(seq_len)]
+    porp_reduce = (1-(percent_reduce_prob/100))
 
     print("Adding 5', barcode, 3'.")
 
@@ -884,7 +897,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 
         # initialize values
         uid_good = False
-        seq_count = 0
+        seq_count = {'unpaired':0,'paired':0,'interaction':0}
         chunk_count += 1
         lines = regions.copy()
 
@@ -918,10 +931,13 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
             full_seq = f'{seq5}{seq}{uid}{seq3}'
 
             # if have looped through enough times reduce probability thresholds
-            porp = (1-(percent_reduce_prob/100))
-            prob_factor = porp**(1 + (seq_count // num_barcode_before_reduce))
-            if seq_count//num_barcode_before_reduce == 0 and seq_count != 0:
-                print(f'For {seq}, failed to find barcode from {seq_count} barcodes, reducing (increasing for max prob) probabilities needed by a factor of {prob_factor}.')
+            prob_factor = {}
+            for type_error,count in seq_count.items():
+                mutiplier = (count // num_barcode_before_reduce)
+                prob_factor[type_error] = porp_reduce**mutiplier
+                if (count-mutiplier)%num_barcode_before_reduce == 0 and count != 0:
+                    seq_count[type_error] += 1
+                    print(f'For {name}, failed to find barcode from {count-mutiplier} barcodes because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
 
             # check if structure correct, save picture if specified and chance has it
             if (save_image_folder is not None) and (random() < save_bpp_fig):
@@ -929,22 +945,29 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                 plot_lines = lines
             else:
                 save_image, plot_lines = None, None
-            uid_good, p_un = check_struct_bpp(full_seq, region_unpaired,
-                                              region_paired_A, region_paired_B,
-                                              regionA, regionB,
-                                              epsilon_interaction=epsilon_interaction,
-                                              epsilon_punpaired=epsilon_punpaired,
-                                              epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                              epsilon_paired=epsilon_paired,
-                                              epsilon_avg_paired=epsilon_avg_paired,
-                                              prob_factor=prob_factor,
-                                              lines=lines,
-                                              save_image=f'{save_image_folder}/{name}.png')
-
+            f_un, f_in, f_p, p_un = check_struct_bpp(full_seq, region_unpaired,
+                                                     region_paired_A, region_paired_B,
+                                                     regionA, regionB,
+                                                     epsilon_interaction=epsilon_interaction,
+                                                     epsilon_punpaired=epsilon_punpaired,
+                                                     epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                     epsilon_paired=epsilon_paired,
+                                                     epsilon_avg_paired=epsilon_avg_paired,
+                                                     prob_factor=prob_factor,
+                                                     lines=lines,
+                                                     save_image=f'{save_image_folder}/{name}.png')
+            uid_good = (f_un + f_in + f_p == [])
+            
             # if barcode is incorrect structure loop through again
             if not uid_good:
                 rejected_uids.append(all_uids[current_uid])
-                seq_count += 1
+                if f_un != []:
+                    seq_count['unpaired'] += 1
+                if f_in != []:
+                    seq_count['interaction'] += 1
+                if f_p != []:
+                    seq_count['paired'] += 1
+
             current_uid += 1
 
             # if looped through all barcodes, go back to previously rejected barcodes and continue loop
@@ -988,7 +1011,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 ###############################################################################
 
 
-def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
+def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
                      region_paired_B=None,
                      regionA=None, regionB=None,
                      epsilon_interaction=MAXPROB_NONINTERACT,
@@ -1033,35 +1056,34 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
     p_unpaired = 1-bpp.sum(axis=0)
 
     # for regions specified, check if structure is ok
-    bad_struct = False
-    if region_unpaired is not None:
-        punpaired_check = p_unpaired[region_unpaired]
-        bad_struct = bad_struct or (
-            punpaired_check.min() < epsilon_punpaired*prob_factor)
-        bad_struct = bad_struct or (
-            punpaired_check.mean() < epsilon_avg_punpaired*prob_factor)
+    fail_un, fail_in, fail_p = [], [], []
+    if regions_unpaired is not None:
+        for region_unpaired in regions_unpaired:
+            punpaired_check = p_unpaired[region_unpaired]
+            if ((punpaired_check.mean() < epsilon_avg_punpaired*prob_factor['unpaired']) or
+                    (punpaired_check.min() < epsilon_punpaired*prob_factor['unpaired'])):
+                fail_un.extend(region_unpaired)
 
     if regionA is not None:
         interaction_check = bpp[regionA][:, regionB]
-        bad_struct = bad_struct or (
-            interaction_check.max() > epsilon_interaction/prob_factor)
+        if (interaction_check.max() > epsilon_interaction/prob_factor['interaction']):
+            fail_in.append([regionA, regionB])
 
     if region_paired_A is not None and region_paired_A != []:
         paired_check = bpp[region_paired_A, region_paired_B]
-        bad_struct = bad_struct or (
-            paired_check.mean() < epsilon_avg_paired*prob_factor)
-        bad_struct = bad_struct or (
-            paired_check.min() < epsilon_paired*prob_factor)
+        if ((paired_check.mean() < epsilon_avg_paired*prob_factor['paired']) or
+                (paired_check.min() < epsilon_paired*prob_factor['paired'])):
+            fail_p.append([region_paired_A, region_paired_B])
 
     # if bad structure return False
-    if bad_struct:
-        return False, p_unpaired
+    if fail_un + fail_in + fail_p != []:
+        return fail_un, fail_in, fail_p, p_unpaired
 
     # otherwise, save image if needed and return True
     else:
         if save_image is not None:
-            plot_bpp(bpp, seq, lines, save_image)
-        return True, p_unpaired
+            plot_bpp(bpp, seq, save_image, lines)
+        return [], [], [], p_unpaired
 
 
 ###############################################################################
@@ -1070,7 +1092,7 @@ def check_struct_bpp(seq, region_unpaired=None, region_paired_A=None,
 
 
 def plot_bpp(bpp, seq, save_image, lines=[], cmap='gist_heat_r',
-             scale_factor=0.12, line_color='grey', xyticks_size=8, dpi=100,
+             scale_factor=0.12, line_color='grey', xyticks_size=8, dpi=80,
              freq_report_nuc_number=10):
     '''
     Plot base pair probability matrix and save image
@@ -1123,8 +1145,8 @@ def plot_bpp(bpp, seq, save_image, lines=[], cmap='gist_heat_r',
 
 def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image,
                    cmap='gist_heat_r', linewidth=8, line_color='cyan', pad_line_color='lime',
-                   scale_factor=0.3, seq_color='grey', mutant_color='cyan',
-                   xyticks_size=8, dpi=100):
+                   scale_factor=0.2, seq_color='grey', mutant_color='cyan',
+                   xyticks_size=8, dpi=80):
     '''
     Plot probability probability unpaired for sequences and save image
 
@@ -1261,8 +1283,8 @@ def _get_all_rand_seq(length, bases=BASES):
 
 
 def _get_random_barcode(num_bp=8, num5hang=0, num3hang=0,
-                     polyA5=0, polyA3=0,
-                     loop=TETRALOOP, bases=BASES):
+                        polyA5=0, polyA3=0,
+                        loop=TETRALOOP, bases=BASES):
     '''
     Return random barcodes of specified structure
 
@@ -1392,26 +1414,6 @@ def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
             print("ERROR side must be 5' or 3'")
 
         return barcodes, num_bp, num_hang, len(loop)
-
-
-def get_used_barcodes(fasta, start, end):
-    '''
-    from a fasta file return all sequences between start and end inclusive
-    '''
-
-    # TODO the add barcodes code should have an  option of
-    # fasta file with barcodes to not use, start, end
-    # and this code should move to helper?
-    # inclusive
-
-    all_seqs = list(SeqIO.parse(fasta, "fasta"))
-    barcodes = []
-    for record in all_seqs:
-        seq = _get_dna_from_SeqRecord(record)
-
-        barcode = seq[start:end+1]
-        barcodes.append(str(seq))
-    return barcodes
 
 
 def get_regions_for_doublemut(doublemuts):
