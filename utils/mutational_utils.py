@@ -1523,57 +1523,6 @@ def _get_5_3_split_multi(lengths, hang, polyAhang, min_length_stem,
     return all_structs,cutoff_by_len,regions_by_len
 
 
-def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
-                   min_hang=3, bases=BASES, min_stem_length=4):
-    '''
-    Get all possible stems for pad
-
-    Args:
-        pad_length (int): the total length of desired pad
-        side (str): either 5' or 3' pad
-        loop (str): sequence of the loop in stem
-        min_hang (int): the minimum length of sequence between pad and sequence of interest, 
-            will only min_hang or min_hang+1 (default 3)
-        bases (list): list of possible bases we can use
-        min_stem_length (int): minimum stem length to allow 
-            if not long enough to form this stem, return random sequence (default 4)
-
-    Returns:
-        list of barcodes
-        number of base-pairs in stem
-        number of hanging nucleotides between stem and sequence of interest
-        number of nucleotides in loop
-    '''
-
-    # TODO probably let specifiy hang has to be polyA
-
-    # for things too short for stem return random sequence
-    min_pad_for_stem = min_stem_length*2 + len(loop) + min_hang
-    if pad_length < min_pad_for_stem:
-        barcodes = _get_all_rand_seq(pad_length, bases)
-        return barcodes, 0, 0, pad_length
-
-    else:
-        # get number base pairs and length of hang
-        num_bp = (pad_length-len(loop)-min_hang)//2
-        num_hang = pad_length-len(loop)-(2*num_bp)
-
-        # for 5' should be on 3' ((((....))))....
-        if side == "5'":
-            barcodes = get_all_barcodes(num_bp=num_bp, num3hang=num_hang,
-                                        loop=loop, bases=bases)
-
-        # for 3' should be on 5' ....((((....))))
-        elif side == "3'":
-            barcodes = get_all_barcodes(num_bp=num_bp, num5hang=num_hang,
-                                        loop=loop, bases=bases)
-
-        else:
-            print("ERROR side must be 5' or 3'")
-
-        return barcodes, num_bp, num_hang, len(loop)
-
-
 def _get_same_length(seqs):
     '''
     Checks if all sequences in a given fasta are the same length
