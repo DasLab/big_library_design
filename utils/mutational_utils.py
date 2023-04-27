@@ -614,28 +614,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
             print(f"Searching for pad for group len {len_group}")
 
             # split length of pad to either end of the sequence and get regions
-            pad_5n, pad_3n, num_bp5, num_bp3 = _get_5_3_split(length_to_add, hang, polyAhang,min_length_stem,max_length_stem, pad_side, len(loop))
-            hang3, hang5 = hang, hang
-            polyAhang5,polyAhang3 = polyAhang,polyAhang
-            loop5, loop3 = loop, loop
-            if num_bp5 == 0:
-                loop5 = ''
-            if pad_5n == 0:
-                hang5,polyAhang5=0,0
-            elif pad_5n != (num_bp5*2)+hang+polyAhang+len(loop5):
-                if hang5 == 0 and  polyAhang != 0:
-                    polyAhang5 = pad_5n-((num_bp5*2)+hang+len(loop5))
-                else:
-                    hang5 = pad_5n-((num_bp5*2)+polyAhang+len(loop5))
-            if num_bp3 == 0:
-                loop3 = ''
-            if pad_3n == 0:
-                hang3,polyAhang3=0,0
-            elif pad_3n != (num_bp3*2)+hang+polyAhang+len(loop3):
-                if hang3 == 0 and  polyAhang != 0:
-                    polyAhang3 = pad_3n-((num_bp3*2)+hang+len(loop3))
-                else:
-                    hang3 = pad_3n-((num_bp3*2)+polyAhang+len(loop3))
+            pad_5n, pad_3n, num_bp5, num_bp3, hang5, hang3, polyAhang5, polyAhang3, loop5, loop3  = _get_5_3_split(length_to_add, hang, polyAhang,min_length_stem,max_length_stem, pad_side, loop)
 
             print(f"Finding a {pad_5n}nt 5' pad with {num_bp5}bp stem {hang5}nt random hang {polyAhang5}nt polyA hang.")
             print(f"Finding a {pad_3n}nt 3' pad with {num_bp3}bp stem {hang3}nt random hang {polyAhang3}nt polyA hang.")
@@ -753,9 +732,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
         # loop until find a good pad
         good_pad = False
         while not good_pad:
-            # TODO from here
-            # TODO to stem code that allows no stem to
-            # but once converted to true random
+            # TODO same code as above to find split? with finding a possble structure for each subset 
             pad5 = ''.join(choices(bases, k=pad_5_len))
             pad3 = ''.join(choices(bases, k=pad_3_len))
             bad_count = 0
@@ -1393,8 +1370,10 @@ def _get_5_3_split(length, pad_side='both'):
         print("ERROR: pad_side not recognized, must be both, 5', or 3'.")
     return pad_5_len, pad_3_len
 '''
-def _get_5_3_split(length,hang,polyAhang,min_length_stem,max_length_stem,pad_side,loop_len):
-    
+
+
+def _get_5_3_split(length,hang,polyAhang,min_length_stem,max_length_stem,pad_side,loop):
+    loop_len = len(loop)
     min_pad_for_stem = min_length_stem*2 + loop_len + hang + polyAhang
     max_pad_for_stem = max_length_stem*2 + loop_len + hang + polyAhang
     pad_5n, pad_3n, num_bp5, num_bp3 = 0,0,0,0
@@ -1406,8 +1385,10 @@ def _get_5_3_split(length,hang,polyAhang,min_length_stem,max_length_stem,pad_sid
                 print("WARNING: stem too loop, fix not implemented.")
         if pad_side == "3'":
             pad_3n = length 
+            num_bp3 = num_bp
         elif pad_side == "5'":
             pad_5n = length 
+            num_bp5 = num_bp
     elif pad_side == 'both':
         if length < min_pad_for_stem:
             if length % 2 == 0:
@@ -1417,6 +1398,10 @@ def _get_5_3_split(length,hang,polyAhang,min_length_stem,max_length_stem,pad_sid
         elif length < max_pad_for_stem:
             pad_5n, pad_3n = 0,length
             num_bp3 = (length-loop_len-hang-polyAhang)//2
+        elif length < 2*min_pad_for_stem:
+            pad_5n, pad_3n = length-max_pad_for_stem, max_pad_for_stem
+            num_bp3 = max_length_stem
+            num_bp5 = (pad_5n-loop_len-hang-polyAhang)//2
         else:
             if length % 2 == 0:
                 pad_5n,pad_3n = length//2, length//2 
@@ -1424,11 +1409,48 @@ def _get_5_3_split(length,hang,polyAhang,min_length_stem,max_length_stem,pad_sid
                 pad_5n,pad_3n = length//2, 1+(length//2)
             num_bp5 = (pad_5n-loop_len-hang-polyAhang)//2
             num_bp3 = (pad_3n-loop_len-hang-polyAhang)//2
-
+            if (num_bp5>max_length_stem) or (num_bp3>max_length_stem):
+                print("WARNING: stem too loop, fix not implemented.")
     else:
         print("ERROR: pad_side not recognized.")
 
-    return pad_5n, pad_3n, num_bp5, num_bp3
+    hang3, hang5 = hang, hang
+    polyAhang5,polyAhang3 = polyAhang,polyAhang
+    loop5, loop3 = loop, loop
+    if num_bp5 == 0:
+        loop5 = ''
+    if pad_5n == 0:
+        hang5,polyAhang5=0,0
+    elif pad_5n != (num_bp5*2)+hang+polyAhang+len(loop5):
+        if hang5 == 0 and  polyAhang != 0:
+            polyAhang5 = pad_5n-((num_bp5*2)+hang+len(loop5))
+        else:
+            hang5 = pad_5n-((num_bp5*2)+polyAhang+len(loop5))
+    if num_bp3 == 0:
+        loop3 = ''
+    if pad_3n == 0:
+        hang3,polyAhang3=0,0
+    elif pad_3n != (num_bp3*2)+hang+polyAhang+len(loop3):
+        if hang3 == 0 and  polyAhang != 0:
+            polyAhang3 = pad_3n-((num_bp3*2)+hang+len(loop3))
+        else:
+            hang3 = pad_3n-((num_bp3*2)+polyAhang+len(loop3))
+    
+
+    return pad_5n, pad_3n, num_bp5, num_bp3, hang5, hang3, polyAhang5, polyAhang3, loop5, loop3
+
+
+def _get_5_3_split_multi(lengths,hang,polyAhang,min_length_stem,max_length_stem,pad_side,loop):
+    # length are lengths of pads
+    # for use in all same pad code, should work if we keep track of cut points
+    lengths.sort()
+    current_length = 0
+    structs = []
+    for full_length in lengths:
+        length = full_length - current_length
+        structs.append(_get_5_3_split(length,hang,polyAhang,min_length_stem,max_length_stem,pad_side,loop))
+        current_length += length
+    return structs
 
 def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
                    min_hang=3, bases=BASES, min_stem_length=4):
