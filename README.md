@@ -1,5 +1,7 @@
 # Das Lab Library Design
 
+## This repository is currently under construction, please expect large changes to occur frequently while this message is here. Please submit issues or pull requests for any bugs, thanks!
+
 A collection of functionalities for preparing library for RNA structure probing.
 
 ## Example functionalities
