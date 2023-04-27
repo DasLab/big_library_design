@@ -66,9 +66,9 @@ window.add_argument('--circularize', action='store_true',
                     help="Whether to circularize the sequence (at 3' end, don't stop but loop back to 5') or not.")
 
 m2seq = parser.add_argument_group('padding for: m2seq or just_library when length not equal')
-m2seq.add_argument('--pad_type', type=str, default='SL_same_per_length', help='If there are sequencees of multiple lengths, to obtain a libarary of equal length some sequences will be padded. This specifies the type of padding with SL_same_per_length (if pad is long enough create a stem-loop, same pad is used for each group of sequences with equal length) or rand_same_all (a single-stranded non-interacting pad is choosen, same for all sequences just using the length of pad required to pad each sequence to same length) as options.')
+m2seq.add_argument('--share_pad', type=str, default='same_length', help='If there are sequencees of multiple lengths, to obtain a libarary of equal length some sequences will be padded. This specifies which sequence share the same pad, all, none or same_length sequences.')
 m2seq.add_argument('--pad_loop',type=str,default='TTCG',help='If padtype is a stem-loop the constant loop to use.')
-m2seq.add_argument('--pad_min_hang',type=int,default=3,help='If padtype is a stem-loop the minimum (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
+m2seq.add_argument('--pad_hang',type=int,default=3,help='If padtype is a stem-loop the minimum (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
 m2seq.add_argument('--pad_num_samples',type=int,default=30,help="Minimum number of sequences to check pad's effect on structure.")
 
 double = parser.add_argument_group('double mutant')
@@ -89,14 +89,14 @@ if args.just_library:
         fasta = f'{args.output_prefix}_pad.fasta'
         add_pad(args.input_fasta,
             fasta,
-            padding_type=args.pad_type,
+            share_pad=args.share_pad,
             epsilon_interaction=args.Pmax_noninteract,
             epsilon_punpaired=args.Pmin_unpaired,
             epsilon_avg_punpaired=args.Pavg_unpaired,
             epsilon_paired=args.Pmin_paired,
             epsilon_avg_paired=args.Pavg_paired,
             loop=args.pad_loop,
-            min_hang=args.pad_min_hang,
+            hang=args.pad_hang,
             min_num_samples=args.pad_num_samples)
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
@@ -155,14 +155,14 @@ elif args.m2seq:
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta'], f'{args.output_prefix}_WT_single_mut.fasta')
     add_pad(f'{args.output_prefix}_WT_single_mut.fasta',
             f'{args.output_prefix}_WT_single_mut_pad.fasta',
-            padding_type=args.pad_type,
+            share_pad=args.share_pad,
             epsilon_interaction=args.Pmax_noninteract,
             epsilon_punpaired=args.Pmin_unpaired,
             epsilon_avg_punpaired=args.Pavg_unpaired,
             epsilon_paired=args.Pmin_paired,
             epsilon_avg_paired=args.Pavg_paired,
             loop=args.pad_loop,
-            min_hang=args.pad_min_hang,
+            hang=args.pad_hang,
             min_num_samples=args.pad_num_samples)
     add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
                               f'{args.output_prefix}_library.fasta',
@@ -196,14 +196,14 @@ elif args.m2seq_with_double:
         f'{args.output_prefix}_WT_single_mut.fasta')
     add_pad(f'{args.output_prefix}_WT_single_mut.fasta',
             f'{args.output_prefix}_WT_single_mut_pad.fasta',
-            padding_type=args.pad_type,
+            share_pad=args.share_pad,
             epsilon_interaction=args.Pmax_noninteract,
             epsilon_punpaired=args.Pmin_unpaired,
             epsilon_avg_punpaired=args.Pavg_unpaired,
             epsilon_paired=args.Pmin_paired,
             epsilon_avg_paired=args.Pavg_paired,
             loop=args.pad_loop,
-            min_hang=args.pad_min_hang,
+            hang=args.min_hang,
             min_num_samples=args.pad_num_samples)
     add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
                               f'{args.output_prefix}_library.fasta',

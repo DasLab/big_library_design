@@ -533,43 +533,42 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
             epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
             epsilon_paired=MINPROB_PAIRED,
             epsilon_avg_paired=MINAVGPROB_PAIRED,
-            loop=TETRALOOP, min_hang=3, min_num_samples=30,
-            max_prop_bad=0.05, pad_side='both'):
+            loop=TETRALOOP, hang=3, polyAhang=0, min_num_samples=30,
+            max_prop_bad=0.05, pad_side='both',
+            min_length_stem=4, max_length_stem=12,
+            num_pads_reduce=100,percent_reduce_prob=10):
     '''
-    # WARNING IN PROCESS OF REFACTORING
-    # min_length_stem max_length_stem hang_length polyA hand length
-    # different, per_legnth, same
-    # min num samples, but also min proportion good 0.95 --> round up
-    # TODO
-    # probably should add ability to randomly generate but this
-    # is fast enough for these small barcode aka get_random_barcode
-
     Given a fasta of sequence pad all sequence to the same length
 
     Args:
         fasta (str): fasta file containing sequence to get mutants of
         out_fasta (str): if specified, save mutants to fasta (default None)
-        padding_type
+        share_pad (str): either all different pads (none), 
+            all same for sequences of same length (same_length),
+            all same where sequence of different length are just truncated (all)
         epsilon_interaction (float): Maximum base-pair-probability for 2 regions to be considered noninteracting
         epsilon_punpaired (float): Minimum probability unpaired for region to be unpaired
         epsilon_avg_punpaired (float): Average probability unpaired for region to be unpaired
         epsilon_paired (float): Minimum base-pair-probability for 2 regions to be considered paired
         epsilon_avg_paired (float): Average base-pair-probability for 2 regions to be considered paired
-        loop
-        min_hang
-        min_num_samples
-        bases
+        loop (str): constant sequence for loop of stem-loop
+        hang (int): distance between sequence and the stem will be this or this+1, random sequence (default 3)
+        polyAhang (int): distance between sequence and the stem will be this or this+1, polyA (default 3)
+        min_length_stem (int): minimum number base-pairs to form stem
+        max_length_stem (int): maximum number of base-pairs to form stem
+        min_num_samples (int): minimum number of samples to test pad structure (default 30)
+        max_prop_bad (float): of the samples sequences, porportion that can be bad (default 0.05)
+        pad_side (str): whether split pad ('both') or force to be exludively 5' or 3'
+        num_pads_reduce (int): number of pads to try before reducing probability (default 100)
+        percent_reduce_prob (float): percent to reduce proabilities each time (default 10)
 
-    Returns:
+    Returns: 
         list of SeqRecord with pads added
         #pad# where numbers are length of pad
         if out_fasta specified, also saves these to fasta file naming added _
 
     TODO seems strange not to let them choose to randomize tetraloop (eg put number instead)
-    TODO change prepare library to match this new writting
     '''
-
-    # crurent options: rand_same_all SL_same_per_length
 
     # get sequences and sort by length
     seqs = list(SeqIO.parse(fasta, "fasta"))
@@ -590,10 +589,10 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
         selected_sec.append(sample(seq_group, k=number_to_select))
         max_bad_structs[len_seq] = floor(max_prop_bad*number_to_select)
         print(f'Pad for length {len_seq} search using {number_to_select} sequences for structure check for each length.')
-    # shoudl be per length
 
     # get max length of pad needed
     desired_len = max(seq_by_length.keys())
+    porp_reduce = (1-(percent_reduce_prob/100))
 
     # if want all pads to be random
     if share_pad == 'none':
@@ -604,9 +603,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
     elif share_pad == 'same_length':
         pads_by_len = {}
         for seqs in selected_sec:
-
-            print(f"Searching for pad for group len {len_group}")
-
+            
             # get length of pad for this group, if 0 done
             len_group = len(str(seqs[0].seq))
             length_to_add = desired_len-len_group
@@ -614,66 +611,79 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                 pads_by_len[len_group] = ['', '']
                 continue
 
-            # split length of pad to either end of the sequence
-            # TODO I think create a function that given inputs gives 5,3 split and single stranded etc, length
-            pad_5n, pad_3n = _get_5_3_split(length_to_add, pad_side)
+            print(f"Searching for pad for group len {len_group}")
 
-            # get all possible pads, and then shuffle them
-            # TODO this would be a place where random generation makes sense
-            # TODO need user inputted structure in here
-            # TODO could this be done outside or for at least both none and per length?
-            pad_5s, num_bp5, num_hang5, loop_len5 = _get_stem_pads(
-                pad_5n, "5'", loop, min_hang, bases)
-            pad_3s, num_bp3, num_hang3, loop_len3 = _get_stem_pads(
-                pad_3n, "3'", loop, min_hang, bases)
-            shuffle(pad_5s)
-            shuffle(pad_3s)
+            # split length of pad to either end of the sequence and get regions
+            pad_5n, pad_3n, num_bp5, num_bp3 = _get_5_3_split(length_to_add, hang, polyAhang,min_length_stem,max_length_stem, pad_side, len(loop))
+            hang3, hang5 = hang, hang
+            polyAhang5,polyAhang3 = polyAhang,polyAhang
+            loop5, loop3 = loop, loop
+            if num_bp5 == 0:
+                loop5 = ''
+            if pad_5n == 0:
+                hang5,polyAhang5=0,0
+            elif pad_5n != (num_bp5*2)+hang+polyAhang+len(loop5):
+                if hang5 == 0 and  polyAhang != 0:
+                    polyAhang5 = pad_5n-((num_bp5*2)+hang+len(loop5))
+                else:
+                    hang5 = pad_5n-((num_bp5*2)+polyAhang+len(loop5))
+            if num_bp3 == 0:
+                loop3 = ''
+            if pad_3n == 0:
+                hang3,polyAhang3=0,0
+            elif pad_3n != (num_bp3*2)+hang+polyAhang+len(loop3):
+                if hang3 == 0 and  polyAhang != 0:
+                    polyAhang3 = pad_3n-((num_bp3*2)+hang+len(loop3))
+                else:
+                    hang3 = pad_3n-((num_bp3*2)+polyAhang+len(loop3))
 
-            # numbp_loop_numbp_hang_seq_hang_numbp_loop_numbp
-            part_lengths = [num_bp5, loop_len5, num_bp5, num_hang5,
-                            len_group, num_hang3, num_bp3, loop_len3, num_bp3]
+            print(f"Finding a {pad_5n}nt 5' pad with {num_bp5}bp stem {hang5}nt random hang {polyAhang5}nt polyA hang.")
+            print(f"Finding a {pad_3n}nt 3' pad with {num_bp3}bp stem {hang3}nt random hang {polyAhang3}nt polyA hang.")
 
-            region_unpaired = list(
-                range(sum(part_lengths[:1]), sum(part_lengths[:2])))
-            region_unpaired.extend(
-                list(range(sum(part_lengths[:3]), sum(part_lengths[:4]))))
+            # get regions for testing structure
+            part_lengths = [num_bp5, len(loop5), num_bp5, hang5+polyAhang5,
+                            len_group, hang3+polyAhang3, num_bp3, len(loop3), num_bp3]
+            region_unpaired = [list(range(sum(part_lengths[:1]),
+                                          sum(part_lengths[:2]))),
+                               list(range(sum(part_lengths[:3]),
+                                          sum(part_lengths[:4]))),
+                               list(range(sum(part_lengths[:5]),
+                                          sum(part_lengths[:6]))),
+                               list(range(sum(part_lengths[:7]),
+                                          sum(part_lengths[:8])))]
+            region_paired_A = list(range(sum(part_lengths[:0]),
+                                         sum(part_lengths[:1])))
+            region_paired_B = list(range(sum(part_lengths[:2]),
+                                         sum(part_lengths[:3])))[::-1]
+            regionA = list(range(sum(part_lengths[:0]),
+                                 sum(part_lengths[:4])))
+            regionB = list(range(sum(part_lengths[:4]),
+                                 sum(part_lengths[:5])))
+            region_paired_A.extend(list(range(sum(part_lengths[:6]),
+                                              sum(part_lengths[:7]))))
+            region_paired_B.extend(list(range(sum(part_lengths[:8]),
+                                              sum(part_lengths[:9])))[::-1])
+            regionA.extend(list(range(sum(part_lengths[:5]),
+                                      sum(part_lengths[:9]))))
 
-            region_paired_A = list(
-                range(sum(part_lengths[:0]), sum(part_lengths[:1])))
-            region_paired_B = list(
-                range(sum(part_lengths[:2]), sum(part_lengths[:3])))[::-1]
-
-            regionA = list(
-                range(sum(part_lengths[:0]), sum(part_lengths[:4])))
-
-            regionB = list(
-                range(sum(part_lengths[:4]), sum(part_lengths[:5])))
-
-            region_unpaired = list(
-                range(sum(part_lengths[:5]), sum(part_lengths[:6])))
-            region_unpaired.extend(
-                list(range(sum(part_lengths[:7]), sum(part_lengths[:8]))))
-            region_paired_A = list(
-                range(sum(part_lengths[:6]), sum(part_lengths[:7])))
-            region_paired_B = list(
-                range(sum(part_lengths[:8]), sum(part_lengths[:9])))[::-1]
-            regionA = list(
-                range(sum(part_lengths[:5]), sum(part_lengths[:9])))
-
-            # loop through to find 5' that works
+            # loop through to find pad that works
             good_pad = False
-            current_pad = 0,
+            seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
+            #current_pad = 0
             while not good_pad:
 
-                # get pad sequence
-                if pad_5n == 0:
-                    pad5 = ''
-                else:
-                    pad5 = _get_dna_from_SeqRecord(pad_5s[current_pad])
-                if pad_3n == 0:
-                    pad3 = ''
-                else:
-                    pad3 = _get_dna_from_SeqRecord(pad_3s[current_pad])
+                # if tried enough relax the probability contstraints
+                prob_factor = {}
+                for type_error, count in seq_count.items():
+                    mutiplier = (count // num_pads_reduce)
+                    prob_factor[type_error] = porp_reduce**mutiplier
+                    if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
+                        seq_count[type_error] += 1
+                        print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
+
+                # get random pad
+                pad5 = _get_random_barcode(num_bp=num_bp5, num3hang=hang5, polyA3=polyAhang5,loop=loop5)
+                pad3 = _get_random_barcode(num_bp=num_bp3, num5hang=hang3, polyA5=polyAhang3,loop=loop3)
 
                 # chek all samples sequences
                 bad_count = 0
@@ -683,31 +693,31 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
 
                     # get full sequence and check its structure
                     full_seq = pad5 + _get_dna_from_SeqRecord(seq) + pad3
-                    good_pad, p_unpaired = check_struct_bpp(
+                    f_un, f_in, f_p, p_unpaired = check_struct_bpp(
                         full_seq, region_unpaired, region_paired_A,
                         region_paired_B, regionA, regionB,
                         epsilon_interaction=epsilon_interaction,
                         epsilon_punpaired=epsilon_punpaired,
                         epsilon_avg_punpaired=epsilon_avg_punpaired,
                         epsilon_paired=epsilon_paired,
-                        epsilon_avg_paired=epsilon_avg_paired)
+                        epsilon_avg_paired=epsilon_avg_paired,
+                        prob_factor=prob_factor)
+                    good_pad = (f_un + f_in + f_p == [])
 
                     # if not good structure add to count
                     # stop if reached maximal bad
                     if not good_pad:
+                        if f_un != []:
+                            seq_count['unpaired'] += 1
+                        if f_in != []:
+                            seq_count['interaction'] += 1
+                        if f_p != []:
+                            seq_count['paired'] += 1
                         bad_count += 1
                         if bad_count >= max_bad_structs[len_group]:
                             break
 
-                # if bad did not work move to next, and shuffle if reached the end
-                current_pad += 1
-                if current_pad == min(len(pad_5s), len(pad_3s)):
-                    print("no pad found, shuffling and trying again")
-                    shuffle(pad_5s)
-                    shuffle(pad_3s)
-                    current_pad = 0
-
-            pads_by_len[len_group] = [pad_5, pad_3]
+            pads_by_len[len_group] = [_get_dna_from_SeqRecord(pad5), _get_dna_from_SeqRecord(pad3)]
 
         print('Found pads, now adding pads.')
         padded_seqs = []
@@ -723,7 +733,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
     # if want all sequences to share same pad (truncated as needed)
     elif share_pad == 'all':
         print(f"Searching for pad for group all sequences")
-        print('WARNING this implementation likely broken')
+        print('ERROR this implementation likely broken')
         # TODO for now only allow it for single stranded as currently
         # is implemented, so new get split should allow for this
 
@@ -887,7 +897,6 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     region_paired_B = list(range(regions[2]-num_bp, regions[2]))[::-1]
     pun_xlabel = [i if i % 10 == 0 else '' for i in range(seq_len)]
     porp_reduce = (1-(percent_reduce_prob/100))
-    
 
     print("Adding 5', barcode, 3'.")
 
@@ -899,7 +908,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 
         # initialize values
         uid_good, mutate_polyA = False, False
-        seq_count = {'unpaired':0,'paired':0,'interaction':0}
+        seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
         chunk_count += 1
         lines = regions.copy()
         num_barcode = num_barcode_before_reduce
@@ -932,23 +941,25 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 
             # if have looped through enough times reduce probability thresholds
             prob_factor = {}
-            for type_error,count in seq_count.items():
+            for type_error, count in seq_count.items():
                 mutiplier = (count // num_barcode)
                 prob_factor[type_error] = porp_reduce**mutiplier
 
-                if (count-mutiplier)%num_barcode == 0 and count != 0:
+                if (count-mutiplier) % num_barcode == 0 and count != 0:
                     seq_count[type_error] += 1
                     print(f'For {name}, failed to find barcode from {count-mutiplier} barcodes because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
                 # when this is like 3x if there is a ployA allow this to mutate -- rand, don't forget change name!
                 if mutiplier >= 3 and num5polyA != 0 and not mutate_polyA:
                     mutate_polyA = True
-                    seq_count={'unpaired':0,'paired':0,'interaction':0}
+                    seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
                     num_barcode = num_barcode_before_reduce*3
                     print(f'For {name}, failed to find barcodes now allowing polyA to be random sequence.')
 
             # create full sequence
             if mutate_polyA:
-                new_hang = _get_random_barcode(num_bp=0, num5hang=num5polyA,loop='').seq
+                new_hang = _get_random_barcode(
+                    num_bp=0, num5hang=num5polyA, loop='').seq
+                # TODO is loop ever a problem, collect information on whether it is loop of hang that is problem??
                 # new_loop = _get_random_barcode(num_bp=0, num5hang=len(loop),loop='').seq
                 # uid = new_hang+uid[num5polyA:num5polyA+num_bp]+new_loop+uid[num5polyA+num_bp+len(loop):]
                 uid = new_hang+uid[num5polyA:]
@@ -972,7 +983,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                                      lines=lines,
                                                      save_image=f'{save_image_folder}/{name}.png')
             uid_good = (f_un + f_in + f_p == [])
-            
+
             # if barcode is incorrect structure loop through again
             if not uid_good:
                 rejected_uids.append(all_uids[current_uid])
@@ -1034,7 +1045,7 @@ def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
                      epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
                      epsilon_paired=MINPROB_PAIRED,
                      epsilon_avg_paired=MINAVGPROB_PAIRED,
-                     prob_factor=1.0,
+                     prob_factor={'unpaired':1,'paired':1,'interaction':1},
                      lines=None, save_image=None):
     '''
     Check if sequence as a base-pair-probaility matrix of desired structure
@@ -1074,10 +1085,11 @@ def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
     fail_un, fail_in, fail_p = [], [], []
     if regions_unpaired is not None:
         for region_unpaired in regions_unpaired:
-            punpaired_check = p_unpaired[region_unpaired]
-            if ((punpaired_check.mean() < epsilon_avg_punpaired*prob_factor['unpaired']) or
-                    (punpaired_check.min() < epsilon_punpaired*prob_factor['unpaired'])):
-                fail_un.extend(region_unpaired)
+            if region_unpaired != []:
+                punpaired_check = p_unpaired[region_unpaired]
+                if ((punpaired_check.mean() < epsilon_avg_punpaired*prob_factor['unpaired']) or
+                        (punpaired_check.min() < epsilon_punpaired*prob_factor['unpaired'])):
+                    fail_un.extend(region_unpaired)
 
     if regionA is not None:
         interaction_check = bpp[regionA][:, regionB]
@@ -1338,6 +1350,25 @@ def _get_random_barcode(num_bp=8, num5hang=0, num3hang=0,
     return seq_rec
 
 
+
+
+def _get_mutations_from_name(name):
+    '''
+    using the naming convention _#N-N_ where # is nucleotide number
+    N are the nucleotides native and mutant, find these and return the number
+    '''
+
+    nucs = []
+    for name_part in name.split('_'):
+        if len(name_part) > 2:
+            if name_part[-2] == '-':
+                nucnum_A, nuc_B = name_part.split('-')
+                num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
+                if nuc_A in BASES and nuc_B in BASES:
+                    nucs.append(int(num))
+    return nucs
+
+'''
 def _get_5_3_split(length, pad_side='both'):
     # TODO magic numbers
     # 4+6+4+6 20
@@ -1361,24 +1392,43 @@ def _get_5_3_split(length, pad_side='both'):
     else:
         print("ERROR: pad_side not recognized, must be both, 5', or 3'.")
     return pad_5_len, pad_3_len
+'''
+def _get_5_3_split(length,hang,polyAhang,min_length_stem,max_length_stem,pad_side,loop_len):
+    
+    min_pad_for_stem = min_length_stem*2 + loop_len + hang + polyAhang
+    max_pad_for_stem = max_length_stem*2 + loop_len + hang + polyAhang
+    pad_5n, pad_3n, num_bp5, num_bp3 = 0,0,0,0
 
+    if pad_side == "3'" or pad_side == "5'":
+        if length >= min_pad_for_stem:
+            num_bp = (length-loop_len-hang-polyAhang)//2
+            if num_bp>max_length_stem:
+                print("WARNING: stem too loop, fix not implemented.")
+        if pad_side == "3'":
+            pad_3n = length 
+        elif pad_side == "5'":
+            pad_5n = length 
+    elif pad_side == 'both':
+        if length < min_pad_for_stem:
+            if length % 2 == 0:
+                pad_5n,pad_3n = length//2, length//2 
+            else:
+                pad_5n,pad_3n = length//2, 1+(length//2)
+        elif length < max_pad_for_stem:
+            pad_5n, pad_3n = 0,length
+            num_bp3 = (length-loop_len-hang-polyAhang)//2
+        else:
+            if length % 2 == 0:
+                pad_5n,pad_3n = length//2, length//2 
+            else:
+                pad_5n,pad_3n = length//2, 1+(length//2)
+            num_bp5 = (pad_5n-loop_len-hang-polyAhang)//2
+            num_bp3 = (pad_3n-loop_len-hang-polyAhang)//2
 
-def _get_mutations_from_name(name):
-    '''
-    using the naming convention _#N-N_ where # is nucleotide number
-    N are the nucleotides native and mutant, find these and return the number
-    '''
+    else:
+        print("ERROR: pad_side not recognized.")
 
-    nucs = []
-    for name_part in name.split('_'):
-        if len(name_part) > 2:
-            if name_part[-2] == '-':
-                nucnum_A, nuc_B = name_part.split('-')
-                num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
-                if nuc_A in BASES and nuc_B in BASES:
-                    nucs.append(int(num))
-    return nucs
-
+    return pad_5n, pad_3n, num_bp5, num_bp3
 
 def _get_stem_pads(pad_length, side="5'", loop=TETRALOOP,
                    min_hang=3, bases=BASES, min_stem_length=4):
