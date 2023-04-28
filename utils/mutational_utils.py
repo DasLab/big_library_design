@@ -1156,10 +1156,13 @@ def plot_bpp(bpp, seq, save_image, lines=[], cmap='gist_heat_r',
             indexing from 0, every freq_report_nuc_number nucleotides (default 10)
     '''
 
-    plt.figure(figsize=(len(seq)*scale_factor, len(seq)*scale_factor))
+    fig = plt.figure(figsize=(len(seq)*scale_factor, len(seq)*scale_factor))
 
     # plot base-pair probability as heatmap
-    plt.imshow(bpp, origin='upper', cmap=cmap)
+    pos = plt.imshow(bpp, origin='upper', cmap=cmap)
+    ax= fig.gca()
+    cax = ax.inset_axes([1.04, 0.2, 0.05, 0.6])
+    fig.colorbar(pos,shrink=0.5,ax=ax,cax=cax)
 
     # add nucleotide numbers to seq and plot on x and y axis
     xlabels = []
@@ -1214,13 +1217,14 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image
         dpi (int): dpi to save image in (default 100)
     '''
 
-    plt.figure(figsize=(len(seqs[0])*scale_factor,
+    fig = plt.figure(figsize=(len(seqs[0])*scale_factor,
                         len(p_unpaired)*scale_factor))
 
     # plot p unpaired as heatmap
     df = pd.DataFrame(p_unpaired).T
-    plt.imshow(df, cmap=cmap)
-
+    pos = plt.imshow(df, cmap=cmap)
+    fig.colorbar(pos,shrink=0.5,location='top')
+    
     # plot sequence ontop of heatmap, coloring the mutations
     ax = plt.gca()
     for i, (seq, mut) in enumerate(zip(seqs, muts)):
@@ -1252,7 +1256,7 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image
     ax.spines['left'].set_visible(False)
     ax.set_ylim((y1, y2))
     ax.tick_params(axis='both', which='both', length=0)
-
+    
     # save
     plt.savefig(save_image, bbox_inches='tight', dpi=dpi)
     plt.close()
