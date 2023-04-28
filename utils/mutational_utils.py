@@ -998,7 +998,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                                      epsilon_avg_paired=epsilon_avg_paired,
                                                      prob_factor=prob_factor,
                                                      lines=lines,
-                                                     save_image=f'{save_image_folder}/{name}.png')
+                                                     save_image=f'{save_image_folder}/{name}.png',mutants=mutations)
             uid_good = (f_un + f_in + f_p == [])
 
             # if barcode is incorrect structure loop through again
@@ -1064,7 +1064,7 @@ def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
                      epsilon_avg_paired=MINAVGPROB_PAIRED,
                      prob_factor={'unpaired': 1,
                                   'paired': 1, 'interaction': 1},
-                     lines=None, save_image=None):
+                     lines=None, save_image=None,mutants=[]):
     '''
     Check if sequence as a base-pair-probaility matrix of desired structure
 
@@ -1127,7 +1127,7 @@ def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
     # otherwise, save image if needed and return True
     else:
         if save_image is not None:
-            plot_bpp(bpp, seq, save_image, lines)
+            plot_bpp(bpp, seq, save_image, lines,mutants=mutants)
         return [], [], [], p_unpaired
 
 
@@ -1138,7 +1138,7 @@ def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
 
 def plot_bpp(bpp, seq, save_image, lines=[], cmap='gist_heat_r',
              scale_factor=0.12, line_color='grey', xyticks_size=8, dpi=80,
-             freq_report_nuc_number=10):
+             freq_report_nuc_number=10, mutant_color='cyan', mutants=[]):
     '''
     Plot base pair probability matrix and save image
 
@@ -1176,7 +1176,11 @@ def plot_bpp(bpp, seq, save_image, lines=[], cmap='gist_heat_r',
             ylabels.append(s)
     plt.xticks(range(len(seq)), xlabels, size=xyticks_size)
     plt.yticks(range(len(seq)), ylabels, size=xyticks_size)
-
+    for mut in mutants:
+        ax.get_xticklabels()[mut].set_color(mutant_color)
+        ax.get_yticklabels()[mut].set_color(mutant_color)
+        plt.hlines(mut, 0, len(seq), color=mutant_color)
+        plt.vlines(mut, 0, len(seq), color=mutant_color)
     # plot vertical and horizantal lines to mark sequence regions
     for line in lines:
         plt.hlines(line, 0, len(seq), color=line_color)
