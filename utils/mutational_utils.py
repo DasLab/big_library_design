@@ -183,7 +183,7 @@ def get_bp_set_from_dotbracket(dotbracket):
 
 
 def get_windows(fasta, window_length, window_slide, out_fasta=None,
-                circularize=False):
+                circularize=False, fraction_use=1):
     '''
     Get sliding windows from an inputted fasta file.
 
@@ -194,6 +194,8 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
         out_fasta (str): if specified, save windows to fasta (default None)
         circularize (bool): whether to circularize the sequence thus once it
             reaches the end, create windows with 3'-5' connected (default False)
+        fraction_use (float): proportion (from start) of genome to use, 
+            defaults all (default 1)
 
     Returns:
         list of SeqRecord with the windows
@@ -207,11 +209,14 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     # get sequences and initialize
     seqs = list(SeqIO.parse(fasta, "fasta"))
     windows = []
+    unused_windows = []
 
     for seq_rec in seqs:
 
         # loop through sequence every window_slide nucleotides
         seq = _get_dna_from_SeqRecord(seq_rec)
+        window_limit = floor(fraction_use*len(seq))
+
         for i in range(0, len(seq), window_slide):
 
             # when we hit the end of sequence
@@ -242,7 +247,16 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
             # save with name inclusive!
             new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
                                       f'{seq_rec.name}_{namenum}', '', '')
-            windows.append(new_rec)
+            if fraction_use !=1 and ((i + window_length-1) > window_limit):
+                unused_windows.append(new_rec)
+            else:
+                windows.append(new_rec)
+
+    # remove and save fraction unused
+    if fraction_use != 1:
+        unused_file = f'{out_fasta.rsplit(".",1)[0]}_unused.{out_fasta.rsplit(".",1)[1]}'
+        SeqIO.write(unused_windows, unused_file, "fasta")
+        print(f'Saved unused windows to {unused_file}.')
 
     # save file
     if out_fasta is not None:
