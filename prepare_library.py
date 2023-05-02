@@ -57,14 +57,14 @@ library.add_argument('--barcode_num5randomhang', type=int, default=0,
 library.add_argument('--barcode_loop', type=str, default='TTCG',
                      help="Constant loop sequence of the barcode stemloop.")
 library.add_argument('--num_barcodes_reduce_prob', type=float, default=100,
-                     help='Number of barcodes to try before reducing probability thresholds by 10%.')
+                     help='Number of barcodes to try before reducing probability thresholds by 10 percent.')
 library.add_argument('--avoid_barcodes_file', type=str, default=None,
                      help='Fasta filed which contains sequences with barcodes to remove.')
 library.add_argument('--avoid_barcodes_start', type=int,
                      help='First nucleotides in barcode.')
 library.add_argument('--avoid_barcodes_end', type=int,
                      help='Last nucleotides in barcode.')
-library.add_argument('--min_edit', type=int,default=2,
+library.add_argument('--min_edit', type=int, default=2,
                      help='Minimum edit distance for barcodes (2 or 3 should suffice.')
 
 window = parser.add_argument_group('window')
@@ -91,7 +91,8 @@ m2seq.add_argument('--pad_num_samples', type=int, default=30,
                    help="Minimum number of sequences to check pad's effect on structure.")
 
 double = parser.add_argument_group('double mutant')
-double.add_argument('--doublemut', nargs='+', help='Two region to do double mutagenis of (one mutant in group A one in group B) format: 1-12,15.64-70,72-78 where this would mean one mutant in nucletoides 1to 12 (inclusive) or 15 and one mutant in region 64 to 70 or 72 to 78. 1-12.1-12 would mean all double mutants in 1to 12. If more than one sequence is in the input need to specify the same number of regions seperated by space eg for 2 sequences: 1-12,15.64-70,72-78 34-78.80-85 ')
+double.add_argument('--doublemut', nargs='+',
+                    help='Two region to do double mutagenis of (one mutant in group A one in group B) format: 1-12,15.64-70,72-78 where this would mean one mutant in nucletoides 1to 12 (inclusive) or 15 and one mutant in region 64 to 70 or 72 to 78. 1-12.1-12 would mean all double mutants in 1to 12. If more than one sequence is in the input need to specify the same number of regions seperated by space eg for 2 sequences: 1-12,15.64-70,72-78 34-78.80-85 ')
 
 args = parser.parse_args()
 
@@ -120,7 +121,8 @@ if args.just_library:
 
     used_barcodes = []
     if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(args.avoid_barcodes_file,args.avoid_barcode_start,args.avoid_barcodes_end)  
+        used_barcodes = get_used_barcodes(
+            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
 
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
@@ -158,7 +160,8 @@ elif args.window:
 
     used_barcodes = []
     if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(args.avoid_barcodes_file,args.avoid_barcode_start,args.avoid_barcodes_end)  
+        used_barcodes = get_used_barcodes(
+            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
 
     add_fixed_seq_and_barcode(f'{args.output_prefix}_windowed.fasta',
                               f'{args.output_prefix}_library.fasta',
@@ -200,10 +203,11 @@ elif args.m2seq:
             loop=args.pad_loop,
             hang=args.pad_hang,
             min_num_samples=args.pad_num_samples)
-    
+
     used_barcodes = []
     if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(args.avoid_barcodes_file,args.avoid_barcode_start,args.avoid_barcodes_end)        
+        used_barcodes = get_used_barcodes(
+            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
 
     add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
                               f'{args.output_prefix}_library.fasta',
@@ -248,11 +252,12 @@ elif args.m2seq_with_double:
             loop=args.pad_loop,
             hang=args.min_hang,
             min_num_samples=args.pad_num_samples)
-  
+
     used_barcodes = []
     if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(args.avoid_barcodes_file,args.avoid_barcode_start,args.avoid_barcodes_end)  
-  
+        used_barcodes = get_used_barcodes(
+            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
+
     add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
