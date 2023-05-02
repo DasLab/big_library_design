@@ -64,6 +64,8 @@ library.add_argument('--avoid_barcodes_start', type=int,
                      help='First nucleotides in barcode.')
 library.add_argument('--avoid_barcodes_end', type=int,
                      help='Last nucleotides in barcode.')
+library.add_argument('--min_edit', type=int,default=2,
+                     help='Minimum edit distance for barcodes (2 or 3 should suffice.')
 
 window = parser.add_argument_group('window')
 window.add_argument('--length', type=int, default=100,
@@ -136,7 +138,9 @@ if args.just_library:
                               save_image_folder=args.save_image_folder,
                               save_bpp_fig=args.save_bpp_fig,
                               punpaired_chunk_size=args.max_seq_punpaired_plot,
-                              num_barcode_before_reduce=args.num_barcodes_reduce_prob)
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob,
+                              used_barcodes=used_barcodes,
+                              min_edit=args.min_edit)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -173,7 +177,8 @@ elif args.window:
                               save_bpp_fig=args.save_bpp_fig,
                               punpaired_chunk_size=args.max_seq_punpaired_plot,
                               num_barcode_before_reduce=args.num_barcodes_reduce_prob,
-                              used_barcodes=used_barcodes)
+                              used_barcodes=used_barcodes,
+                              min_edit=args.min_edit)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -216,7 +221,9 @@ elif args.m2seq:
                               save_image_folder=args.save_image_folder,
                               save_bpp_fig=args.save_bpp_fig,
                               punpaired_chunk_size=args.max_seq_punpaired_plot,
-                              num_barcode_before_reduce=args.num_barcodes_reduce_prob)
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob,
+                              used_barcodes=used_barcodes,
+                              min_edit=args.min_edit)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -262,7 +269,9 @@ elif args.m2seq_with_double:
                               save_image_folder=args.save_image_folder,
                               save_bpp_fig=args.save_bpp_fig,
                               punpaired_chunk_size=args.max_seq_punpaired_plot,
-                              num_barcode_before_reduce=args.num_barcodes_reduce_prob)
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob,
+                              used_barcodes=used_barcodes,
+                              min_edit=args.min_edit)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 

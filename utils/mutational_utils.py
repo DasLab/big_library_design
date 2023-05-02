@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from Bio import SeqIO, Seq
 from arnie.bpps import bpps
 from arnie.utils import convert_dotbracket_to_bp_list
+from Levenshtein import distance as edit_distance
+from pybktree import BKTree
 
 
 '''
@@ -518,7 +520,7 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
         else:
             hang3 = uid[-num3hang:]
             stemA = uid[num5hang:-num3hang]
-        stemB = _get_reverse_complement(uid)
+        stemB = _get_reverse_complement(stemA)
 
         # put all barcode parts together
         seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)
@@ -851,6 +853,20 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
     return padded_seqs
 
 
+def get_edit_distance(barcodeA,barcodeB,num_bp=0,len_loop=0):
+    if num_bp == 0:
+        dist = edit_distance(barcodeA,barcodeB)
+    else:
+        start_stem = -len_loop-(2*num_bp)
+        end_stem = -len_loop-num_bp
+        stemA = barcodeA[start_stem:end_stem]
+        stemB = barcodeB[start_stem:end_stem]
+        otherA =  barcodeA[:start_stem]+barcodeB[end_stem:-num_bp]
+        otherB =  barcodeB[:start_stem]+barcodeB[end_stem:-num_bp]
+        dist = 2*edit_distance(stemA,stemB)
+        dist += edit_distance(otherA,otherB)
+    return dist
+
 def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               num_bp=8, num5hang=0, num5polyA=4,
                               loop=TETRALOOP,
@@ -862,7 +878,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                               save_image_folder=None, save_bpp_fig=0,
                               punpaired_chunk_size=500, used_barcodes=[],
                               num_barcode_before_reduce=100,
-                              percent_reduce_prob=10):
+                              percent_reduce_prob=10,min_edit=2):
     '''
     From a fasta of sequence, add constant regions and barcode
 
@@ -887,6 +903,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         num_barcode_before_reduce (int): for each sequence, the number of barcodes to try
             before reducing the probability thresholds by 10% (default 100)
         percent_reduce_prob (float): percent to reduce probability threshold each time (default 10)
+        min_edit (int): minimum edit distance of barcodes, base-pairs and num5hang included (default 2)
 
     Returns:
         list of SeqRecord which are library ready
@@ -904,6 +921,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     all_uids = get_all_barcodes(num_bp=num_bp, loop=loop, num5hang=num5hang,
                                 polyA5=num5polyA)
     shuffle(all_uids)
+
 
     # read sequences, check all same length, and initialize variables
     seqs = list(SeqIO.parse(fasta, "fasta"))
@@ -929,6 +947,23 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     region_paired_B = list(range(regions[2]-num_bp, regions[2]))[::-1]
     pun_xlabel = [i if i % 10 == 0 else '' for i in range(seq_len)]
     porp_reduce = (1-(percent_reduce_prob/100))
+    if num_bp == 0 and min_edit > 1:
+        added_barcodes = BKTree(edit_distance)
+        for barcode in used_barcodes:
+            added_barcodes.add(barcode)
+    elif min_edit > 2:
+        edit_dist_stem = lambda barcodeA,barcodeB: get_edit_distance(barcodeA,barcodeB,num_bp,len(loop))
+        added_barcodes = BKTree(edit_dist_stem)
+        for barcode in used_barcodes:
+            added_barcodes.add(barcode)
+    elif (min_edit == 2 and num5hang != 0):
+        added_barcodes = {}
+        start_stem = -len(loop)-(2*num_bp)
+        end_stem = -len(loop)-num_bp
+        for barcode in used_barcodes:
+            stemA = barcode[start_stem:end_stem]
+            otherA =  barcode[:start_stem]+barcode[end_stem:-num_bp]
+            added_barcodes[stemA] = [otherA]
 
     print("Adding 5', barcode, 3'.")
 
@@ -967,9 +1002,27 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 
             # get barcode, get new if barcode already used
             uid = all_uids[current_uid].seq
-            while str(uid) in used_barcodes:
-                current_uid += 1
-                uid = all_uids[current_uid].seq
+            if (num_bp == 0 and min_edit > 1) or (min_edit > 2):
+                close_barcodes = added_barcodes.find(uid,min_edit)
+                while close_barcodes != []:
+                    rejected_uids.append(all_uids[current_uid])                  
+                    current_uid += 1
+                    uid = all_uids[current_uid].seq
+                    close_barcodes = added_barcodes.find(uid,min_edit)
+            elif (min_edit == 2 and num5hang != 0):
+                stem = uid[start_stem:end_stem]
+                other =  uid[:start_stem]+uid[end_stem:-num_bp]
+                if stem in added_barcodes:
+                    dists = [edit_distance(other,otherB) for otherB in added_barcodes[stem]]
+                    while min(dists) <= min_edit:
+                        rejected_uids.append(all_uids[current_uid])
+                        current_uid += 1
+                        uid = all_uids[current_uid].seq
+                        dists = [edit_distance(other,otherB) for otherB in added_barcodes[stem]]
+            else:
+                while str(uid) in used_barcodes:
+                    current_uid += 1
+                    uid = all_uids[current_uid].seq
 
             # if have looped through enough times reduce probability thresholds
             prob_factor = {}
@@ -979,13 +1032,13 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 
                 if (count-mutiplier) % num_barcode == 0 and count != 0:
                     seq_count[type_error] += 1
-                    print(f'For {name}, failed to find barcode from {count-mutiplier} barcodes because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
+                    print(f'{name}, failed to find barcode from {count-mutiplier} barcodes because of {type_error}, reducing probabilities by {prob_factor[type_error]}.')
                 # when this is 3x, if there is a ployA allow this to mutate
                 if mutiplier >= 3 and num5polyA != 0 and not mutate_polyA:
                     mutate_polyA = True
                     seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
                     num_barcode = num_barcode_before_reduce*3
-                    print(f'For {name}, failed to find barcodes now allowing polyA to be random sequence.')
+                    print(f'{name}, failed to find barcodes now allowing polyA to be random sequence.')
 
             # create full sequence
             if mutate_polyA:
@@ -1036,6 +1089,15 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         seqs_for_labeling.append(full_seq)
         all_full_seqs.append(SeqIO.SeqRecord(Seq.Seq(full_seq), name, '', ''))
         p_unpaireds[name] = p_un
+        if (num_bp == 0 and min_edit > 1) or (min_edit > 2):
+            added_barcodes.add(uid)
+        elif (min_edit == 2 and num5hang != 0):
+            if stem not in added_barcodes:
+                added_barcodes[stem] = [other]
+            else:
+                added_barcodes[stem].append(other)
+        else:
+            used_barcodes.append(uid)
 
         # when processed enough sequences
         # save probability unpaired figures and reset parameters
