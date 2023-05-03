@@ -7,33 +7,35 @@ from utils.mutational_utils import *
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-i', '--input_fasta', type=str, required=True,
+
+required = parser.add_argument_group('Required')
+required.add_argument('-i', '--input_fasta', type=str, required=True,
                     help='Sequences to make library out of, file in fasta format.')
-parser.add_argument('-o', '--output_prefix', type=str,
+required.add_argument('-o', '--output_prefix', type=str,
                     required=True, help='Prefix of the output files.')
 
 programs_ = parser.add_argument_group('programs')
 programs = programs_.add_mutually_exclusive_group()
 programs.add_argument('--just_library', action='store_true',
-                      help='The just_libary program will take all sequences provided and then just prepare the libary using only those sequences.')
+                      help='The just_libary program will take all sequences provided and then just prepare the library using only those sequences.')
 programs.add_argument('--window', action='store_true',
                       help='The window program will take each sequence, create sliding windows and then prepare the library sequences.')
 programs.add_argument('--m2seq', action='store_true',
-                      help='The m2seq program will take each sequence, get all single mutants, create a noninteracting pad to ensure each sequence is the same length if needed, and then prepare the library sequences.')
+                      help='The m2seq program will take each sequence, get all single mutants, create a non-interacting pad to ensure each sequence is the same length if needed, and then prepare the library sequences.')
 programs.add_argument('--m2seq_with_double', action='store_true',
                       help='The program runs the m2seq program with the addition of double mutants in user defined regions.')
 
 visuals = parser.add_argument_group('Visuals')
 visuals.add_argument('--save_bpp_fig', type=float, default=0,
-                     help='Proportion to save images of the base-pair-probability matrices. 0 is none, 1 is all, in between is random seleciton of sequences.')
+                     help='Proportion to save images of the base-pair-probability matrices. 0 is none, 1 is all, in between is random selection of sequences.')
 visuals.add_argument('--save_image_folder', default=None,
-                     help="Folder to save images (proabbility unpaired and if specified base-pair-probability matrices), default don't save.")
+                     help="Folder to save images (probability unpaired and if specified base-pair-probability matrices), default don't save.")
 visuals.add_argument('--max_seq_punpaired_plot', type=int, default=500,
-                     help='The maximum number of sequences to put in one probability unpaired plot, will split into seperate images if smaller than total number of sequences.')
+                     help='The maximum number of sequences to put in one probability unpaired plot, will split into separate images if smaller than total number of sequences.')
 
-struct = parser.add_argument_group('Strctural checks')
+struct = parser.add_argument_group('Structural checks')
 struct.add_argument('--Pmax_noninteract', type=float, default=0.05,
-                    help='Maximum base-pair-probability for 2 regions to be considered noninteracting.')
+                    help='Maximum base-pair-probability for 2 regions to be considered non-interacting.')
 struct.add_argument('--Pmin_paired', type=float, default=0.75,
                     help='Minimum base-pair-probability for 2 regions to be considered paired.')
 struct.add_argument('--Pavg_paired', type=float, default=0.85,
@@ -43,7 +45,7 @@ struct.add_argument('--Pmin_unpaired', type=float, default=0.75,
 struct.add_argument('--Pavg_unpaired', type=float, default=0.85,
                     help='Average probability unpaired for region to be unpaired.')
 
-library = parser.add_argument_group('Libarary parts')
+library = parser.add_argument_group('Library parts')
 library.add_argument('--seq5', type=str, default='GGGAACGACTCGAGTAGAGTCGAAAA',
                      help="Constant sequence to place at 5' of every sequence in library.")
 library.add_argument('--seq3', type=str, default='AAAAGAAACAACAACAACAAC',
@@ -53,17 +55,17 @@ library.add_argument('--barcode_numbp', type=int, default=8,
 library.add_argument('--barcode_num5polyA', type=int, default=4,
                      help="The length of polyA stretch placed before the barcode stem, if specified, also put before the random 5'hang..")
 library.add_argument('--barcode_num5randomhang', type=int, default=0,
-                     help="The legnth of addtional random (single-standed) sequence to place before the barcode stem.")
+                     help="The length of additional random (single-standed) sequence to place before the barcode stem.")
 library.add_argument('--barcode_loop', type=str, default='TTCG',
-                     help="Constant loop sequence of the barcode stemloop.")
+                     help="Constant loop sequence of the barcode stem-loop.")
 library.add_argument('--num_barcodes_reduce_prob', type=float, default=100,
                      help='Number of barcodes to try before reducing probability thresholds by 10 percent.')
 library.add_argument('--avoid_barcodes_file', type=str, default=None,
                      help='Fasta filed which contains sequences with barcodes to remove.')
 library.add_argument('--avoid_barcodes_start', type=int,
-                     help='First nucleotides in barcode.')
+                     help='First nucleotide in barcode.')
 library.add_argument('--avoid_barcodes_end', type=int,
-                     help='Last nucleotides in barcode.')
+                     help='Last nucleotide in barcode.')
 library.add_argument('--min_edit', type=int, default=2,
                      help='Minimum edit distance for barcodes (2 or 3 should suffice.')
 
@@ -77,22 +79,22 @@ window.add_argument('--circularize', action='store_true',
 window.add_argument('--prop_windows_keep', type=float, default=1.0,
                     help='The proportion of windows to keep (from the start), others not added to library.')
 window.add_argument('--prop_windows_keep_random', type=float, default=1.0,
-                    help='The proportion of windoes to keep (randomly selected), others not added to library.')
+                    help='The proportion of windows to keep (randomly selected), others not added to library.')
 
 m2seq = parser.add_argument_group(
     'padding for: m2seq or just_library when length not equal')
 m2seq.add_argument('--share_pad', type=str, default='same_length',
-                   help='If there are sequencees of multiple lengths, to obtain a libarary of equal length some sequences will be padded. This specifies which sequence share the same pad, all, none or same_length sequences.')
+                   help='If there are sequences of multiple lengths, to obtain a library of equal length some sequences will be padded. This specifies which sequence share the same pad, all, none or same_length sequences.')
 m2seq.add_argument('--pad_loop', type=str, default='TTCG',
-                   help='If padtype is a stem-loop the constant loop to use.')
+                   help='If pad has stem the constant loop to use.')
 m2seq.add_argument('--pad_hang', type=int, default=3,
-                   help='If padtype is a stem-loop the minimum (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
+                   help='Number nucleotides (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
 m2seq.add_argument('--pad_num_samples', type=int, default=30,
                    help="Minimum number of sequences to check pad's effect on structure.")
 
 double = parser.add_argument_group('double mutant')
 double.add_argument('--doublemut', nargs='+',
-                    help='Two region to do double mutagenis of (one mutant in group A one in group B) format: 1-12,15.64-70,72-78 where this would mean one mutant in nucletoides 1to 12 (inclusive) or 15 and one mutant in region 64 to 70 or 72 to 78. 1-12.1-12 would mean all double mutants in 1to 12. If more than one sequence is in the input need to specify the same number of regions seperated by space eg for 2 sequences: 1-12,15.64-70,72-78 34-78.80-85 ')
+                    help='Two region to do double mutants of (one mutant in group A one in group B) format: 1-12,15.64-70,72-78 where this would mean one mutant in nucleotides 1 to 12 (inclusive) or 15 and one mutant in region 64 to 70 or 72 to 78. 1-12.1-12 would mean all double mutants in 1to 12. If more than one sequence is in the input need to specify the same number of regions separated by space eg for 2 sequences: 1-12,15.64-70,72-78 34-78.80-85 ')
 
 args = parser.parse_args()
 
@@ -192,24 +194,30 @@ elif args.window:
 elif args.m2seq:
     get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta'], f'{args.output_prefix}_WT_single_mut.fasta')
-    add_pad(f'{args.output_prefix}_WT_single_mut.fasta',
-            f'{args.output_prefix}_WT_single_mut_pad.fasta',
-            share_pad=args.share_pad,
-            epsilon_interaction=args.Pmax_noninteract,
-            epsilon_punpaired=args.Pmin_unpaired,
-            epsilon_avg_punpaired=args.Pavg_unpaired,
-            epsilon_paired=args.Pmin_paired,
-            epsilon_avg_paired=args.Pavg_paired,
-            loop=args.pad_loop,
-            hang=args.pad_hang,
-            min_num_samples=args.pad_num_samples)
+
+    # check pad needed
+    if get_same_length(args.input_fasta):
+        fasta = f'{args.output_prefix}_WT_single_mut.fasta'
+    else:
+        fasta = f'{args.output_prefix}_WT_single_mut_pad.fasta'
+        add_pad(f'{args.output_prefix}_WT_single_mut.fasta',
+                fasta,
+                share_pad=args.share_pad,
+                epsilon_interaction=args.Pmax_noninteract,
+                epsilon_punpaired=args.Pmin_unpaired,
+                epsilon_avg_punpaired=args.Pavg_unpaired,
+                epsilon_paired=args.Pmin_paired,
+                epsilon_avg_paired=args.Pavg_paired,
+                loop=args.pad_loop,
+                hang=args.pad_hang,
+                min_num_samples=args.pad_num_samples)
 
     used_barcodes = []
     if args.avoid_barcodes_file is not None:
         used_barcodes = get_used_barcodes(
             args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
 
-    add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
+    add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
                               seq3=args.seq3,
@@ -231,34 +239,42 @@ elif args.m2seq:
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
+
 ###############################################################################
 # m2seq_with_double
 ###############################################################################
+
 
 elif args.m2seq_with_double:
     get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
     regionAs, regionBs = get_regions_for_doublemut(args.doublemut)
     get_all_double_mutants(args.input_fasta, f'{args.output_prefix}_double_mut.fasta', regionAs, regionBs)
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta', f'{args.output_prefix}_double_mut.fasta'],
-                   f'{args.output_prefix}_WT_single_mut.fasta')
-    add_pad(f'{args.output_prefix}_WT_single_mut.fasta',
-            f'{args.output_prefix}_WT_single_mut_pad.fasta',
-            share_pad=args.share_pad,
-            epsilon_interaction=args.Pmax_noninteract,
-            epsilon_punpaired=args.Pmin_unpaired,
-            epsilon_avg_punpaired=args.Pavg_unpaired,
-            epsilon_paired=args.Pmin_paired,
-            epsilon_avg_paired=args.Pavg_paired,
-            loop=args.pad_loop,
-            hang=args.min_hang,
-            min_num_samples=args.pad_num_samples)
+                   f'{args.output_prefix}_WT_single_double_mut.fasta')
+
+    # check pad needed
+    if get_same_length(args.input_fasta):
+        fasta = f'{args.output_prefix}_WT_single_double_mut.fasta'
+    else:
+        fasta = f'{args.output_prefix}_WT_single_double_mut_pad.fasta'
+        add_pad(f'{args.output_prefix}_WT_single_double_mut.fasta',
+                fasta,
+                share_pad=args.share_pad,
+                epsilon_interaction=args.Pmax_noninteract,
+                epsilon_punpaired=args.Pmin_unpaired,
+                epsilon_avg_punpaired=args.Pavg_unpaired,
+                epsilon_paired=args.Pmin_paired,
+                epsilon_avg_paired=args.Pavg_paired,
+                loop=args.pad_loop,
+                hang=args.pad_hang,
+                min_num_samples=args.pad_num_samples)
 
     used_barcodes = []
     if args.avoid_barcodes_file is not None:
         used_barcodes = get_used_barcodes(
             args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
 
-    add_fixed_seq_and_barcode(f'{args.output_prefix}_WT_single_mut_pad.fasta',
+    add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
                               seq3=args.seq3,
