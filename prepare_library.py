@@ -60,8 +60,8 @@ library.add_argument('--barcode_loop', type=str, default='TTCG',
                      help="Constant loop sequence of the barcode stem-loop.")
 library.add_argument('--num_barcodes_reduce_prob', type=float, default=100,
                      help='Number of barcodes to try before reducing probability thresholds by 10 percent.')
-library.add_argument('--avoid_barcodes_file', type=str, default=None,
-                     help='Fasta filed which contains sequences with barcodes to remove.')
+library.add_argument('--avoid_barcodes_file', nargs='+',
+                     help='Fasta files which contains sequences with barcodes to remove.')
 library.add_argument('--avoid_barcodes_start', type=int,
                      help='First nucleotide in barcode.')
 library.add_argument('--avoid_barcodes_end', type=int,
@@ -124,9 +124,9 @@ if args.just_library:
                 min_num_samples=args.pad_num_samples)
 
     used_barcodes = []
-    if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(
-            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
+    if args.avoid_barcodes_file != []:
+        for file in args.avoid_barcodes_files:
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
@@ -164,9 +164,9 @@ elif args.window:
         randomly_select_seqs(f'{args.output_prefix}_windowed.fasta', f'{args.output_prefix}_windowed_rejected.fasta', args.prop_windows_keep_random)
 
     used_barcodes = []
-    if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(
-            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
+    if args.avoid_barcodes_file != []:
+        for file in args.avoid_barcodes_files:
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(f'{args.output_prefix}_windowed.fasta',
                               f'{args.output_prefix}_library.fasta',
@@ -216,9 +216,9 @@ elif args.m2seq:
                 min_num_samples=args.pad_num_samples)
 
     used_barcodes = []
-    if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(
-            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
+    if args.avoid_barcodes_file != []:
+        for file in args.avoid_barcodes_files:
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
@@ -273,9 +273,9 @@ elif args.m2seq_with_double:
                 min_num_samples=args.pad_num_samples)
 
     used_barcodes = []
-    if args.avoid_barcodes_file is not None:
-        used_barcodes = get_used_barcodes(
-            args.avoid_barcodes_file, args.avoid_barcode_start, args.avoid_barcodes_end)
+    if args.avoid_barcodes_file != []:
+        for file in args.avoid_barcodes_files:
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
