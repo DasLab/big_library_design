@@ -961,7 +961,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     seq5 = _get_dna_from_SeqRecord(seq5)
     seq3 = _get_dna_from_SeqRecord(seq3)
     loop = _get_dna_from_SeqRecord(loop)
-    pun_xlabel = [i if i % 10 == 0 else '' for i in range(seq_len)]
+    pun_xlabel = [i if i % 10 == 0 else '' for i in range(seq_len+len(seq5)+len(seq3)+len(all_uids[0]))]
     porp_reduce = (1-(percent_reduce_prob/100))
 
     # find structural regions
