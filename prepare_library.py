@@ -60,7 +60,7 @@ library.add_argument('--barcode_loop', type=str, default='TTCG',
                      help="Constant loop sequence of the barcode stem-loop.")
 library.add_argument('--num_barcodes_reduce_prob', type=float, default=100,
                      help='Number of barcodes to try before reducing probability thresholds by 10 percent.')
-library.add_argument('--avoid_barcodes_file', nargs='+',
+library.add_argument('--avoid_barcodes_files', nargs='+',
                      help='Fasta files which contains sequences with barcodes to remove.')
 library.add_argument('--avoid_barcodes_start', type=int,
                      help='First nucleotide in barcode.')
@@ -93,6 +93,8 @@ m2seq.add_argument('--pad_hang', type=int, default=3,
                    help='Number nucleotides (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
 m2seq.add_argument('--pad_num_samples', type=int, default=30,
                    help="Minimum number of sequences to check pad's effect on structure.")
+m2seq.add_argument('--pad_to_length', type=int, default=None,
+                     help='Length of sequnce to pad to, if nothing, longest length in fasta file.')
 
 double = parser.add_argument_group('double mutant')
 double.add_argument('--doublemut', nargs='+',
@@ -121,10 +123,11 @@ if args.just_library:
                 epsilon_avg_paired=args.Pavg_paired,
                 loop=args.pad_loop,
                 hang=args.pad_hang,
-                min_num_samples=args.pad_num_samples)
+                min_num_samples=args.pad_num_samples,
+                pad_to_length=args.pad_to_length)
 
     used_barcodes = []
-    if args.avoid_barcodes_file != []:
+    if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
             used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 
@@ -164,7 +167,7 @@ elif args.window:
         randomly_select_seqs(f'{args.output_prefix}_windowed.fasta', f'{args.output_prefix}_windowed_rejected.fasta', args.prop_windows_keep_random)
 
     used_barcodes = []
-    if args.avoid_barcodes_file != []:
+    if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
             used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 
@@ -213,10 +216,11 @@ elif args.m2seq:
                 epsilon_avg_paired=args.Pavg_paired,
                 loop=args.pad_loop,
                 hang=args.pad_hang,
-                min_num_samples=args.pad_num_samples)
+                min_num_samples=args.pad_num_samples,
+                pad_to_length=args.pad_to_length)
 
     used_barcodes = []
-    if args.avoid_barcodes_file != []:
+    if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
             used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 
@@ -251,7 +255,7 @@ elif args.m2seq:
 elif args.m2seq_with_double:
     get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
     regionAs, regionBs = get_regions_for_doublemut(args.doublemut)
-    get_all_double_mutants(args.input_fasta, f'{args.output_prefix}_double_mut.fasta', regionAs, regionBs)
+    get_all_double_mutants(args.input_fasta, regionAs, regionBs,out_fasta=f'{args.output_prefix}_double_mut.fasta')
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta', f'{args.output_prefix}_double_mut.fasta'],
                    f'{args.output_prefix}_WT_single_double_mut.fasta')
 
@@ -270,10 +274,11 @@ elif args.m2seq_with_double:
                 epsilon_avg_paired=args.Pavg_paired,
                 loop=args.pad_loop,
                 hang=args.pad_hang,
-                min_num_samples=args.pad_num_samples)
+                min_num_samples=args.pad_num_samples,
+                pad_to_length=args.pad_to_length)
 
     used_barcodes = []
-    if args.avoid_barcodes_file != []:
+    if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
             used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
 

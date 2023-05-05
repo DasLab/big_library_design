@@ -369,38 +369,40 @@ def get_all_double_mutants(fasta, regionAs, regionBs,
     # get all sequences and initialize
     all_WT = list(SeqIO.parse(fasta, "fasta"))
     all_double_mutants = []
+    print(regionAs,regionBs)
 
     # check user specified regions for every sequence in the fasta
     if len(all_WT) != len(regionAs) or len(all_WT) != len(regionBs):
         print(f'WARNING: you must list regions (as a list of lists) for all sequences in the fasta, number sequences in fasta {len(all_WT)} and number of regions specified {len(regionAs)} {len(regionBs)}')
 
-    for record, regionA, regionB in zip(all_WT, regionAs, regionBs):
+    for record, regionA_s, regionB_s in zip(all_WT, regionAs, regionBs):
 
         seq = _get_dna_from_SeqRecord(record)
 
-        # at each position pair, get double mutants
-        for i in regionA:
-            for mutA in bases:
-                if mutA != seq[i]:
-                    for j in regionB:
-                        for mutB in bases:
-                            if mutB != seq[j]:
+        for regionA,regionB in zip(regionA_s,regionB_s):
+            # at each position pair, get double mutants
+            for i in regionA:
+                for mutA in bases:
+                    if mutA != seq[i]:
+                        for j in regionB:
+                            for mutB in bases:
+                                if mutB != seq[j]:
 
-                                # get mutant
-                                # name according to convention, in order, index at 1
-                                if i == j:
-                                    continue
-                                elif i < j:
-                                    new_seq = seq[:i]+mutA + \
-                                        seq[i+1:j]+mutB+seq[j+1:]
-                                    name = f' {record.id}_{i}{seq[i]}-{mutA}_{j}{seq[j]}-{mutB}'
-                                else:
-                                    new_seq = seq[:j]+mutB + \
-                                        seq[j+1:i]+mutA+seq[i+1:]
-                                    name = f' {record.id}_{j}{seq[j]}-{mutB}_{i}{seq[i]}-{mutA}'
-                                new_mut = SeqIO.SeqRecord(
-                                    Seq.Seq(new_seq), name, '', '')
-                                all_double_mutants.append(new_mut)
+                                    # get mutant
+                                    # name according to convention, in order, index at 1
+                                    if i == j:
+                                        continue
+                                    elif i < j:
+                                        new_seq = seq[:i]+mutA + \
+                                            seq[i+1:j]+mutB+seq[j+1:]
+                                        name = f' {record.id}_{i}{seq[i]}-{mutA}_{j}{seq[j]}-{mutB}'
+                                    else:
+                                        new_seq = seq[:j]+mutB + \
+                                            seq[j+1:i]+mutA+seq[i+1:]
+                                        name = f' {record.id}_{j}{seq[j]}-{mutB}_{i}{seq[i]}-{mutA}'
+                                    new_mut = SeqIO.SeqRecord(
+                                        Seq.Seq(new_seq), name, '', '')
+                                    all_double_mutants.append(new_mut)
 
     # save file
     if out_fasta is not None:
@@ -577,7 +579,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
             loop=TETRALOOP, hang=3, polyAhang=0, min_num_samples=30,
             max_prop_bad=0.05, pad_side='both',
             min_length_stem=4, max_length_stem=12,
-            num_pads_reduce=100, percent_reduce_prob=10):
+            num_pads_reduce=100, percent_reduce_prob=10,pad_to_length=None):
     '''
     Given a fasta of sequence pad all sequence to the same length
 
@@ -630,7 +632,10 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
         print(f'Pad for length {len_seq} search using {number_to_select} sequences for structure check for each length.')
 
     # get max length of pad needed
-    desired_len = max(seq_by_length.keys())
+    if pad_to_length is None:
+        desired_len = max(seq_by_length.keys())
+    else:
+        desired_len = pad_to_length
     porp_reduce = (1-(percent_reduce_prob/100))
 
     # if want all pads to be random
@@ -1529,7 +1534,7 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
             structs["5"]['N'] = length//2
             structs["3"]['N'] = length//2
             if length % 2 != 0:
-                structs["3'"]['N'] += 1
+                structs["3"]['N'] += 1
 
         # if enough for 1 stem but not too much for 1 stem, make just 1 stem
         elif length < max_pad_for_stem:
@@ -1673,26 +1678,31 @@ def get_regions_for_doublemut(doublemuts):
     # TODO probably should be input double mutants and this goes to helper
     '''
 
-    regionAs, regionBs = [], []
+    regionAss, regionBss = [], []
     for mutstr in doublemuts:
-        strA, strB = mutstr.split('.')
-        regionA = []
-        for nucrange in strA.split(','):
-            nucrange = [int(x) for x in nucrange.split('-')]
-            if len(nucrange) == 2:
-                regionA.extend(list(range(nucrange[0], nucrange[1]+1)))
-            else:
-                regionA.extend(nucrange)
-        regionAs.append(regionA)
-        regionB = []
-        for nucrange in strB.split(','):
-            nucrange = [int(x) for x in nucrange.split('-')]
-            if len(nucrange) == 2:
-                regionB.extend(list(range(nucrange[0], nucrange[1]+1)))
-            else:
-                regionB.extend(nucrange)
-        regionBs.append(regionB)
-    return regionAs, regionBs
+        regionAs, regionBs = [], []
+        for mutstrreg in mutstr.split('..'):
+            strA, strB = mutstrreg.split('.')
+            regionA = []
+            for nucrange in strA.split(','):
+                nucrange = [int(x) for x in nucrange.split('-')]
+                if len(nucrange) == 2:
+                    regionA.extend(list(range(nucrange[0], nucrange[1]+1)))
+                else:
+                    regionA.extend(nucrange)
+            regionAs.append(regionA)
+            regionB = []
+            for nucrange in strB.split(','):
+                nucrange = [int(x) for x in nucrange.split('-')]
+                if len(nucrange) == 2:
+                    regionB.extend(list(range(nucrange[0], nucrange[1]+1)))
+                else:
+                    regionB.extend(nucrange)
+            regionBs.append(regionB)
+        regionAss.append(regionAs)
+        regionBss.append(regionBs)
+    print(regionAss,regionBss)
+    return regionAss, regionBss
 
 
 ###############################################################################
