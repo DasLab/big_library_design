@@ -184,8 +184,25 @@ def get_bp_set_from_dotbracket(dotbracket):
 ###############################################################################
 
 
+def _fill_in_any_incomplete(seq,seqs):
+    incomplete_seq = {'N':['A','C','T','G'],
+                        'R':['A','G'],
+                        'Y':['C','T']}
+    if seq == '':
+        return seqs
+    elif seq[0] in incomplete_seq:
+        new_seqs = []
+        for n in incomplete_seq[seq[0]]:
+            potential_seq = n+seq[1:]
+            potential_seqs = [s[:-len(potential_seq)]+potential_seq for s in seqs]
+            new_seqs.extend(potential_seqs)
+        return _fill_in_any_incomplete(seq[1:],new_seqs)
+    else:
+        return _fill_in_any_incomplete(seq[1:],seqs)
+
+
 def get_windows(fasta, window_length, window_slide, out_fasta=None,
-                circularize=False, fraction_use=1):
+                circularize=False, fraction_use=1, reverse_complement=False):
     '''
     Get sliding windows from an inputted fasta file.
 
@@ -246,13 +263,27 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 new_seq = seq[a:b]
                 namenum = f'{a}-{b-1}'
 
-            # save with name inclusive!
-            new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
-                                      f'{seq_rec.name}_{namenum}', '', '')
-            if fraction_use != 1 and ((i + window_length-1) > window_limit):
-                unused_windows.append(new_rec)
-            else:
-                windows.append(new_rec)
+            new_seqs = _fill_in_any_incomplete(new_seq,[new_seq])
+            for j,new_seq in enumerate(new_seqs):
+                if len(new_seqs) == 1:
+                    name = f'{seq_rec.name}_{namenum}'
+                else:
+                    name = f'{seq_rec.name}_amb{j}_{namenum}'
+                # save with name inclusive!
+                new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
+                                          name, '', '')
+                if fraction_use != 1 and ((i + window_length-1) > window_limit):
+                    unused_windows.append(new_rec)
+                else:
+                    windows.append(new_rec)
+                if reverse_complement:
+                    rc_rec = SeqIO.SeqRecord(Seq.Seq(_get_reverse_complement(new_seq)),
+                                          f'{name}_rc', '', '')
+                    if fraction_use != 1 and ((i + window_length-1) > window_limit):
+                        unused_windows.append(rc_rec)
+                    else:
+                        windows.append(rc_rec)
+
 
     # remove and save fraction unused
     if fraction_use != 1:
@@ -1691,3 +1722,4 @@ def plot_punpaired_from_fasta(fasta, save_image):
             labels.append('')
 
     plot_punpaired(p_unpaireds, labels, seqs, muts, [], [], save_image)
+

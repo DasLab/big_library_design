@@ -76,6 +76,8 @@ window.add_argument('--step', type=int, default=10,
                     help='The step size of the sliding window.')
 window.add_argument('--circularize', action='store_true',
                     help="Whether to circularize the sequence (at 3' end, don't stop but loop back to 5') or not.")
+window.add_argument('--reverse_complement', action='store_true',
+                    help="Whether to add the negative sense strand.")
 window.add_argument('--prop_windows_keep', type=float, default=1.0,
                     help='The proportion of windows to keep (from the start), others not added to library.')
 window.add_argument('--prop_windows_keep_random', type=float, default=1.0,
@@ -156,6 +158,7 @@ elif args.window:
     get_windows(args.input_fasta, args.length, args.step,
                 f'{args.output_prefix}_windowed.fasta',
                 circularize=args.circularize,
+                reverse_complement=args.reverse_complement,
                 fraction_use=args.prop_windows_keep)
     if args.prop_windows_keep_random != 1:
         randomly_select_seqs(f'{args.output_prefix}_windowed.fasta', f'{args.output_prefix}_windowed_rejected.fasta', args.prop_windows_keep_random)
