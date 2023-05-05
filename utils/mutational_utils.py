@@ -1049,6 +1049,8 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                         rejected_uids.append(all_uids[current_uid])
                         current_uid += 1
                         uid = all_uids[current_uid].seq
+                        stem = uid[start_stem:end_stem]
+                        other = uid[:start_stem]+uid[end_stem:-num_bp]
                         dists = [edit_distance(other, otherB)
                                  for otherB in added_barcodes[stem]]
             else:
