@@ -1281,15 +1281,15 @@ def plot_bpp(bpp, seq, save_image, lines=[], cmap='gist_heat_r',
             ylabels.append(s)
     plt.xticks(range(len(seq)), xlabels, size=xyticks_size)
     plt.yticks(range(len(seq)), ylabels, size=xyticks_size)
+    # plot vertical and horizantal lines to mark sequence regions
+    for line in lines:
+        plt.hlines(line, 0, len(seq), color=line_color)
+        plt.vlines(line, 0, len(seq), color=line_color)
     for mut in mutants:
         ax.get_xticklabels()[mut].set_color(mutant_color)
         ax.get_yticklabels()[mut].set_color(mutant_color)
         plt.hlines(mut, 0, len(seq), color=mutant_color)
         plt.vlines(mut, 0, len(seq), color=mutant_color)
-    # plot vertical and horizantal lines to mark sequence regions
-    for line in lines:
-        plt.hlines(line, 0, len(seq), color=line_color)
-        plt.vlines(line, 0, len(seq), color=line_color)
 
     # formatting
     plt.xlim(0, len(seq))
@@ -1701,7 +1701,6 @@ def get_regions_for_doublemut(doublemuts):
             regionBs.append(regionB)
         regionAss.append(regionAs)
         regionBss.append(regionBs)
-    print(regionAss,regionBss)
     return regionAss, regionBss
 
 
