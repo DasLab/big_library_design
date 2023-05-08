@@ -129,7 +129,7 @@ if args.just_library:
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
-            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
@@ -169,7 +169,7 @@ elif args.window:
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
-            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(f'{args.output_prefix}_windowed.fasta',
                               f'{args.output_prefix}_library.fasta',
@@ -222,7 +222,7 @@ elif args.m2seq:
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
-            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
