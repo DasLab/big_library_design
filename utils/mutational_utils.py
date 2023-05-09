@@ -1019,6 +1019,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                  len(seq5)+len(seq)-pad3_length]
             lines.extend(new_lines)
         else:
+            pad5_length = 0
             new_lines = []
         pad_lines.append(new_lines)
 
