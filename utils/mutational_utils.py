@@ -161,7 +161,7 @@ def get_used_barcodes(fasta, start, end):
         seq = _get_dna_from_SeqRecord(record)
         # end is inclusive
         barcode = seq[start:end+1]
-        barcodes.append(str(seq))
+        barcodes.append(str(barcode))
     return barcodes
 
 
@@ -946,6 +946,10 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     # get and randomly shuffle all potential barcodes
     all_uids = get_all_barcodes(num_bp=num_bp, loop=loop, num5hang=num5hang,
                                 polyA5=num5polyA)
+    if len(used_barcodes) != 0:
+         if len(all_uids[0]) != len(used_barcodes[0]):
+             print('Error, used barcodes are not the correct length')
+    
     shuffle(all_uids)
 
     # read sequences, check all same length
