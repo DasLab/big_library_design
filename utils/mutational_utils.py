@@ -239,7 +239,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
         for i in range(0, len(seq), window_slide):
 
             # when we hit the end of sequence
-            if i+window_length >= len(seq):
+            if i+window_length > len(seq):
 
                 # add last window
                 if not circularize:
@@ -262,6 +262,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 a, b = i, i+window_length
                 new_seq = seq[a:b]
                 namenum = f'{a}-{b-1}'
+          
 
             new_seqs = _fill_in_any_incomplete(new_seq,[new_seq])
             for j,new_seq in enumerate(new_seqs):
@@ -1498,6 +1499,7 @@ def _get_mutations_from_name(name):
     '''
 
     nucs = []
+    print(name)
     for name_part in name.split('_'):
         if len(name_part) > 2:
             if name_part[-2] == '-':
