@@ -949,7 +949,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                 polyA5=num5polyA)
     if len(used_barcodes) != 0:
          if len(all_uids[0]) != len(used_barcodes[0]):
-             print('Error, used barcodes are not the correct length')
+             print('ERROR: usd barcodes are not the correct length')
     
     shuffle(all_uids)
 
@@ -999,8 +999,11 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         end_stem = -len(loop)-num_bp
         for barcode in used_barcodes:
             stemA = barcode[start_stem:end_stem]
-            otherA = barcode[:start_stem]+barcode[end_stem:-num_bp]
-            added_barcodes[stemA] = [otherA]
+            otherA = str(barcode[:start_stem]+barcode[end_stem:-num_bp])
+            if stemA in added_barcodes:
+                added_barcodes[stemA].append(otherA)
+            else:
+                added_barcodes[stemA] = [otherA]
 
     print("Adding 5', barcode, 3'.")
 
@@ -1047,7 +1050,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                     close_barcodes = added_barcodes.find(uid, min_edit)
             elif (min_edit == 2 and num5hang != 0):
                 stem = uid[start_stem:end_stem]
-                other = uid[:start_stem]+uid[end_stem:-num_bp]
+                other = str(uid[:start_stem]+uid[end_stem:-num_bp])
                 if stem in added_barcodes:
                     dists = [edit_distance(other, otherB)
                              for otherB in added_barcodes[stem]]
@@ -1056,7 +1059,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                         current_uid += 1
                         uid = all_uids[current_uid].seq
                         stem = uid[start_stem:end_stem]
-                        other = uid[:start_stem]+uid[end_stem:-num_bp]
+                        other = str(uid[:start_stem]+uid[end_stem:-num_bp])
                         if stem in added_barcodes:
                             dists = [edit_distance(other, otherB)
                                      for otherB in added_barcodes[stem]]
@@ -1499,7 +1502,6 @@ def _get_mutations_from_name(name):
     '''
 
     nucs = []
-    print(name)
     for name_part in name.split('_'):
         if len(name_part) > 2:
             if name_part[-2] == '-':
