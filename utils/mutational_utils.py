@@ -628,6 +628,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
     for len_seq, seq_group in seq_by_length.items():
         number_to_select = min(len(seq_group), max(
             min_num_samples, len(seq_group)*0.01))
+        number_to_select = round(number_to_select)
         selected_sec.append(sample(seq_group, k=number_to_select))
         max_bad_structs[len_seq] = floor(max_prop_bad*number_to_select)
         print(f'Pad for length {len_seq} search using {number_to_select} sequences for structure check for each length.')
