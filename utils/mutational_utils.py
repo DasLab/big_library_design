@@ -187,7 +187,15 @@ def get_bp_set_from_dotbracket(dotbracket):
 def _fill_in_any_incomplete(seq,seqs):
     incomplete_seq = {'N':['A','C','T','G'],
                         'R':['A','G'],
-                        'Y':['C','T']}
+                        'Y':['C','T'],
+                        'S':['C','G'],
+                        'W':['A','T'],
+                        'K':['T','G'],
+                        'M':['A','C'],
+                        'B':['C','T','G'],
+                        'D':['A','T','G'],
+                        'H':['A','C','T'],
+                        'V':['A','C','G'],}
     if seq == '':
         return seqs
     elif seq[0] in incomplete_seq:
