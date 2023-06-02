@@ -133,7 +133,7 @@ def get_same_length(fasta):
     '''
 
     seqs = list(SeqIO.parse(fasta, "fasta"))
-    return _get_same_length(seqs)[0]
+    return _get_same_length(seqs)
 
 
 def check_sequences_contents(fasta,seq5=SEQ5, seq3=SEQ3,bases=BASES):
@@ -400,7 +400,7 @@ def get_all_double_mutants(fasta, regionAs, regionBs,
     # get all sequences and initialize
     all_WT = list(SeqIO.parse(fasta, "fasta"))
     all_double_mutants = []
-    print(regionAs,regionBs)
+    # print(regionAs,regionBs)
 
     # check user specified regions for every sequence in the fasta
     if len(all_WT) != len(regionAs) or len(all_WT) != len(regionBs):
@@ -1143,7 +1143,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                                               epsilon_avg_paired=epsilon_avg_paired,
                                               prob_factor=prob_factor,
                                               lines=lines,
-                                              save_image=f'{save_image_folder}/{name}.png', mutants=mutations)
+                                              save_image=save_image, mutants=mutations)
             uid_good = struct_results["pass"]
 
             # if barcode is incorrect structure loop through again
@@ -1776,4 +1776,3 @@ def plot_punpaired_from_fasta(fasta, save_image):
             labels.append('')
 
     plot_punpaired(p_unpaireds, labels, seqs, muts, [], [], save_image)
-

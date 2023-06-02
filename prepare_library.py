@@ -105,36 +105,41 @@ double.add_argument('--doublemut', nargs='+',
 args = parser.parse_args()
 
 ###############################################################################
-# just library
+# check library
 ###############################################################################
 
 if args.check_library:
     barcodes = get_used_barcodes(args.input_fasta, args.avoid_barcodes_start, args.avoid_barcodes_end)
-    print('Confirm this is a reasonable barcode, otherwise change --avoid_barcodes_start and --avoid_barcodes_end',barcodes[0])
+    print('Confirm these are barcodes, otherwise change --avoid_barcodes_start and --avoid_barcodes_end',sample(barcodes,5))
     names = [s.name for s in list(SeqIO.parse(args.input_fasta, "fasta"))]
-    if get_same_length(args.input_fasta):
+    if get_same_length(args.input_fasta)[0]:
         print("All sequences are of the same length.")
     else:
         print('ERROR: seuqences are not all the same lengh')
     seq_good, problems = check_sequences_contents(args.input_fasta,seq5=args.seq5, seq3=args.seq3,bases=['A','C','G','T'])
     if seq_good:
-        print("All sequences have correct 3' and 5' regions and no unkown bases.")
+        print(f"All sequences have correct 5' {args.seq5} and 3' {args.seq3} regions and no unkown bases.")
     else:
         for p in problems:
             print('ERROR', p)
+    all_good = True
     for i,x in enumerate(barcodes):
         for j,y in enumerate(barcodes[i+1:]):
             if edit_distance(x,y) < args.min_edit:
-                print(f'ERROR {names[i]} has close barcode {x}, with {names[i+j+1]}, {y}, distance is {edit_distance(x,y)}.')
-        
-# python prepare_library.py --check_library -i 05232023_library.fasta -o _ --avoid_barcodes_start 126 --avoid_barcodes_end 148 --min_edit 2
+                all_good = False
+                print(f'ERROR {names[i]} has close barcode {x}, with {names[i+j+1]}, {y}, distance is {edit_distance(x,y)} which is less than minimum specified {args.min_edit}.')
+    if all_good:
+        print(f'All barcodes are unqiue to the specfied edit distance of {args.min_edit}.')
+
+
 ###############################################################################
 # just library
 ###############################################################################
 
 elif args.just_library:
     # check pad needed
-    if get_same_length(args.input_fasta):
+    same_length, length = get_same_length(args.input_fasta)
+    if same_length and length==args.pad_to_length:
         fasta = args.input_fasta
     else:
         fasta = f'{args.output_prefix}_pad.fasta'
@@ -227,7 +232,8 @@ elif args.m2seq:
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta'], f'{args.output_prefix}_WT_single_mut.fasta')
 
     # check pad needed
-    if get_same_length(args.input_fasta):
+    same_length, length = get_same_length(args.input_fasta)
+    if same_length and length==args.pad_to_length:
         fasta = f'{args.output_prefix}_WT_single_mut.fasta'
     else:
         fasta = f'{args.output_prefix}_WT_single_mut_pad.fasta'
@@ -285,7 +291,8 @@ elif args.m2seq_with_double:
                    f'{args.output_prefix}_WT_single_double_mut.fasta')
 
     # check pad needed
-    if get_same_length(args.input_fasta):
+    same_length, length = get_same_length(args.input_fasta)
+    if same_length and length==args.pad_to_length:
         fasta = f'{args.output_prefix}_WT_single_double_mut.fasta'
     else:
         fasta = f'{args.output_prefix}_WT_single_double_mut_pad.fasta'
@@ -305,7 +312,7 @@ elif args.m2seq_with_double:
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
-            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcode_start, args.avoid_barcodes_end))
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
 
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
