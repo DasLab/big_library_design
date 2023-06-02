@@ -136,6 +136,28 @@ def get_same_length(fasta):
     return _get_same_length(seqs)[0]
 
 
+def check_sequences_contents(fasta,seq5=SEQ5, seq3=SEQ3,bases=BASES):
+    problems = []
+    names = []
+    sequences = []
+    seqs = list(SeqIO.parse(fasta, "fasta"))
+    for seq_rec in seqs:
+        seq = _get_dna_from_SeqRecord(seq_rec)
+        if seq in sequences:
+            problems.append(f"{seq_rec.name} is a repeated sequence.")
+        if seq_rec.name in names:
+            problems.append(f"{seq_rec.name} is a repeated name.")
+        if seq[:len(seq5)] != seq5:
+            problems.append(f"{seq_rec.name} has incorrect 5' sequence.")
+        if seq[-len(seq3):] != seq3:
+            problems.append(f"{seq_rec.name} has incorrect 3' sequence.")
+        for n in seq:
+            if n not in bases:
+                problems.append(f"{seq_rec.name} has non {bases} base.")
+        sequences.append(seq)
+        names.append(seq_rec.name)
+    return len(problems)==0, problems
+
 def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
     '''
     Given 2 fasta files, removes any sequence in the first that

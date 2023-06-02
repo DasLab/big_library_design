@@ -16,6 +16,8 @@ required.add_argument('-o', '--output_prefix', type=str,
 
 programs_ = parser.add_argument_group('programs')
 programs = programs_.add_mutually_exclusive_group()
+programs.add_argument('--check_library', action='store_true',
+                      help='The check_libary program will take one fasta and make sure it is ready for submission, reporting any problems.')
 programs.add_argument('--just_library', action='store_true',
                       help='The just_libary program will take all sequences provided and then just prepare the library using only those sequences.')
 programs.add_argument('--window', action='store_true',
@@ -102,12 +104,35 @@ double.add_argument('--doublemut', nargs='+',
 
 args = parser.parse_args()
 
-
 ###############################################################################
 # just library
 ###############################################################################
 
-if args.just_library:
+if args.check_library:
+    barcodes = get_used_barcodes(args.input_fasta, args.avoid_barcodes_start, args.avoid_barcodes_end)
+    print('Confirm this is a reasonable barcode, otherwise change --avoid_barcodes_start and --avoid_barcodes_end',barcodes[0])
+    names = [s.name for s in list(SeqIO.parse(args.input_fasta, "fasta"))]
+    if get_same_length(args.input_fasta):
+        print("All sequences are of the same length.")
+    else:
+        print('ERROR: seuqences are not all the same lengh')
+    seq_good, problems = check_sequences_contents(args.input_fasta,seq5=args.seq5, seq3=args.seq3,bases=['A','C','G','T'])
+    if seq_good:
+        print("All sequences have correct 3' and 5' regions and no unkown bases.")
+    else:
+        for p in problems:
+            print('ERROR', p)
+    for i,x in enumerate(barcodes):
+        for j,y in enumerate(barcodes[i+1:]):
+            if edit_distance(x,y) < args.min_edit:
+                print(f'ERROR {names[i]} has close barcode {x}, with {names[i+j+1]}, {y}, distance is {edit_distance(x,y)}.')
+        
+# python prepare_library.py --check_library -i 05232023_library.fasta -o _ --avoid_barcodes_start 126 --avoid_barcodes_end 148 --min_edit 2
+###############################################################################
+# just library
+###############################################################################
+
+elif args.just_library:
     # check pad needed
     if get_same_length(args.input_fasta):
         fasta = args.input_fasta
