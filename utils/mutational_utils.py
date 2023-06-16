@@ -245,6 +245,8 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
             reaches the end, create windows with 3'-5' connected (default False)
         fraction_use (float): proportion (from start) of genome to use, 
             defaults all (default 1)
+        reverse_complement (bool): instead of sequence in fasta, use
+            reverse complement
 
     Returns:
         list of SeqRecord with the windows
@@ -276,10 +278,17 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                     a, b = len(seq)-window_length, len(seq)
                     new_seq = seq[a:b]
                     namenum = f'{a}-{b-1}'
-                    new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
+                    if reverse_complement:
+                        new_rec = SeqIO.SeqRecord(Seq.Seq(_get_reverse_complement(new_seq)),
+                                              f'{name}_rc', '', '')
+                    else:
+                        new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
                                               f'{seq_rec.name}_{namenum}',
                                               '', '')
-                    windows.append(new_rec)
+                    if fraction_use != 1 and ((i + window_length-1) > window_limit):
+                        unused_windows.append(new_rec)
+                    else:
+                        windows.append(new_rec)
                     break
 
                 # or circularize and add from 5' until very end
@@ -292,7 +301,6 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 a, b = i, i+window_length
                 new_seq = seq[a:b]
                 namenum = f'{a}-{b-1}'
-          
 
             new_seqs = _fill_in_any_incomplete(new_seq,[new_seq])
             for j,new_seq in enumerate(new_seqs):
@@ -301,19 +309,17 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 else:
                     name = f'{seq_rec.name}_amb{j}_{namenum}'
                 # save with name inclusive!
-                new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
-                                          name, '', '')
+                if reverse_complement:
+                    new_rec = SeqIO.SeqRecord(Seq.Seq(_get_reverse_complement(new_seq)),
+                                          f'{name}_rc', '', '')
+                else:
+                    new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
+                                          f'{seq_rec.name}_{namenum}',
+                                          '', '')
                 if fraction_use != 1 and ((i + window_length-1) > window_limit):
                     unused_windows.append(new_rec)
                 else:
                     windows.append(new_rec)
-                if reverse_complement:
-                    rc_rec = SeqIO.SeqRecord(Seq.Seq(_get_reverse_complement(new_seq)),
-                                          f'{name}_rc', '', '')
-                    if fraction_use != 1 and ((i + window_length-1) > window_limit):
-                        unused_windows.append(rc_rec)
-                    else:
-                        windows.append(rc_rec)
 
 
     # remove and save fraction unused

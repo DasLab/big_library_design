@@ -79,7 +79,7 @@ window.add_argument('--step', type=int, default=10,
 window.add_argument('--circularize', action='store_true',
                     help="Whether to circularize the sequence (at 3' end, don't stop but loop back to 5') or not.")
 window.add_argument('--reverse_complement', action='store_true',
-                    help="Whether to add the negative sense strand.")
+                    help="Whether to use the negative sense strand instead.")
 window.add_argument('--prop_windows_keep', type=float, default=1.0,
                     help='The proportion of windows to keep (from the start), others not added to library.')
 window.add_argument('--prop_windows_keep_random', type=float, default=1.0,
