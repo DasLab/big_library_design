@@ -188,20 +188,6 @@ def get_used_barcodes(fasta, start, end):
 
 
 ###############################################################################
-# other utils
-###############################################################################
-
-
-def get_bp_set_from_dotbracket(dotbracket):
-    '''
-    Given a dotbracket structure, return a list of base-pairs
-    IGNORES pseudoknots
-    '''
-
-    return convert_dotbracket_to_bp_list(dotbracket)
-
-
-###############################################################################
 # get desired sequences
 ###############################################################################
 
