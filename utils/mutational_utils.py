@@ -1190,6 +1190,84 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
     return all_full_seqs
 
 
+def add_library_elements(fasta, out_fasta=None, 
+                              bases=BASES, share_pad='same_length',
+                              seq5=SEQ5, seq3=SEQ3,
+                              barcode_num_bp=8, barcode_num5hang=0, barcode_num5polyA=4,
+                              barcode_loop=TETRALOOP,
+                              epsilon_interaction=MAXPROB_NONINTERACT,
+                              epsilon_punpaired=MINPROB_UNPAIRED,
+                              epsilon_avg_punpaired=MINAVGPROB_UNPAIRED,
+                              epsilon_paired=MINPROB_PAIRED,
+                              epsilon_avg_paired=MINAVGPROB_PAIRED,
+                              save_image_folder=None, save_bpp_fig=0,
+                              punpaired_chunk_size=500, used_barcodes=[],
+                              num_barcode_before_reduce=100,
+                              percent_reduce_prob=10, min_edit=2,
+                              pad_loop=TETRALOOP, pad_hang=3, pad_polyAhang=0, pad_min_num_samples=30,
+            pad_max_prop_bad=0.05, pad_side='both',
+            min_length_stem=4, max_length_stem=12,
+            num_pads_reduce=100, pad_to_length=None):
+    '''
+    From a fasta of sequences, add constant regions and barcodes
+    Given a fasta of sequence pad all sequence to the same length
+
+    Args:
+        fasta (str): fasta file containing sequence to get mutants of
+        out_fasta (str): if specified, save library to fasta (default None)
+
+        share_pad (str): either all different pads (none),
+            all same for sequences of same length (same_length),
+            all same where sequence of different length are just truncated (all)
+        pad_loop (str): constant sequence for loop of stem-loop
+        pad_hang (int): distance between sequence and the stem will be this or this+1, random sequence (default 3)
+        pad_polyAhang (int): distance between sequence and the stem will be this or this+1, polyA (default 3)
+        pad_min_num_samples (int): minimum number of samples to test pad structure (default 30)
+        pad_max_prop_bad (float): of the samples sequences, proportion that can be bad (default 0.05)
+        pad_side (str): whether split pad ('both') or force to be exclusively 5' or 3'
+        num_pads_reduce (int): number of pads to try before reducing probability (default 100)
+        percent_reduce_prob (float): percent to reduce probabilities each time (default 10)
+        pad_to_length (int): minimum length to pad sequences to        
+
+        seq5 (str): the constant sequence to place at 5' end of all sequences
+        seq3 (str): the constant sequence to place at 3' end of all sequences
+
+        barcode_num_bp (int): number of base pairs to have in barcode stem (default 8)
+        barcode_num5hang (int): number of random nucleotides to put before the stem (default 0)
+        barcode_num5polyA (int): number of A to put before the barcode (stem and 5 random hang if applicable) (default 4)
+        barcode_loop (str): sequence of loop to have in the hairpin
+
+        min_length_stem (int): minimum number base-pairs to form stem
+        max_length_stem (int): maximum number of base-pairs to form stem
+
+        epsilon_interaction (float): Maximum base-pair-probability for 2 regions to be considered non-interacting
+        epsilon_punpaired (float): Minimum probability unpaired for region to be unpaired
+        epsilon_avg_punpaired (float): Average probability unpaired for region to be unpaired
+        epsilon_paired (float): Minimum base-pair-probability for 2 regions to be considered paired
+        epsilon_avg_paired (float): Average base-pair-probability for 2 regions to be considered paired
+
+        used_barcodes (list): list of sequences not to use as barcodes (default [])
+        num_barcode_before_reduce (int): for each sequence, the number of barcodes to try
+            before reducing the probability thresholds by 10% (default 100)
+        percent_reduce_prob (float): percent to reduce probability threshold each time (default 10)
+        min_edit (int): minimum edit distance of barcodes, base-pairs and num5hang included (default 2)
+
+        save_image_folder (str): folder to save images to
+        save_bpp_fig (float): proportion of sequences to save base-pair-probability matrix figure, 0 is none, 1 is all
+        punpaired_chunk_size (int): max number of sequences to plot on each p unpaired plot (default 500)
+
+    Returns:
+        list of SeqRecord which are library ready, pads, barcodes, and constant regions
+        if pad added # pad# where numbers are length of pad
+        if out_fasta specified, also saves these to fasta file, _libraryready appended to names        
+
+    TODO 
+        fixed pad???
+        change prepare_libary over to this function
+    '''
+    print("IN PROGRESS CODE: combining padding and adding barcode+fixed sequences")
+    return None
+
 ###############################################################################
 # check structures
 ###############################################################################
