@@ -16,7 +16,25 @@ A library has the following features:
 - A sequence of interest
 - Optionally padding regions to make the length of the library uniform
 
+Below we will focus on each of these features and the design decisions that can be make.
+
 ### Sequences of interest
+
+There are many potential types of sequence sets that can be interesting to study. Below is the list of currently implemented options, please submit a issue for any desired features.
+
+#### List of sequences
+
+You can come with a list of sequences already prepared, see [library preperation below](###Creating-library-from-already-prepared-sequence-list).
+
+#### Windows of long sequences
+
+#### All single mutations of sequence of interest
+
+#### All double mutations across pairs of regions
+
+#### All rescue mutants of a list of base-pairs
+
+While not scripted in any of our major functionality pipelines, this can be accomplished using [get_wcf_rescue_mutants](https://github.com/DasLab/big_library_design/blob/541410e4a3470ac0b5c9e86707f29e13af5f0502/utils/mutational_utils.py#L438).
 
 ### Padding
 
