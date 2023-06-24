@@ -1,6 +1,6 @@
 # Das Lab Library Design
 
-## This repository is currently under construction, please expect large changes to occur frequently while this message is here. Please submit issues or pull requests for any bugs, thanks!
+## This repository is currently under construction, please expect large changes to occur frequently while this message is here. Please submit [issues](https://github.com/DasLab/big_library_design/issues) or [pull requests](https://github.com/DasLab/big_library_design/pulls) for any bugs, thanks!
 
 A collection of functionalities for preparing library for RNA structure probing.
 
@@ -24,9 +24,11 @@ There are many potential types of sequence sets that can be interesting to study
 
 #### List of sequences
 
-You can come with a list of sequences already prepared, see [library preperation below](###creating-library-from-already-prepared-sequence-list).
+You can come with a list of sequences already prepared, see [library preperation below](#creating-library-from-already-prepared-sequence-list).
 
 #### Windows of long sequences
+
+![example windows](documentation/window_example.png)
 
 Given a long sequence, or a set of long sequences, you can create windows of this sequence of a specified length. You can decide the following options:
 
@@ -41,15 +43,20 @@ You can find a full pipeline starting with window creation [below](#creating-lib
 
 #### All single mutations of sequence of interest
 
-TODO image
+![example m2seq](documentation/m2seq_example.png)
 
 For mutate-map like expirements you can take a sequence and mutate all nucleotide to all possible other mutations. This results in 3 x sequence length mutations.
 
+You can find a full pipeline starting with single mutation creation [below](#creating-library-for-m2seq-all-single-mutants)
+
 #### All double mutations across pairs of regions
 
-TODO image
+![example double](documentation/double_example.png)
 
 We can also enumerate all possible double mutation (9 per nucleotide pair) between 2-regions. This results in 9 x length region A x length region B double mutants.
+
+You can find a full pipeline starting with single mutation creation [below](#creating-library-with-all-single-mutants-and-select-double)
+
 
 #### All rescue mutants of a list of base-pairs
 
@@ -97,7 +104,7 @@ We check that the 3' pad, 5' pad, and barcode all fold as requested. We check th
 
 ## Example functionalities
 
-Major functionalities have been scripted in `prepare_library.py`. Please see `python prepare_library.py -h` for details on the options and example runs below. Note these scripted functionalities are a subset of what is possible with the code base. Please submit an issue if you want an additional library preparation method to be added to this main script.
+Major functionalities have been scripted in `prepare_library.py`. Please see `python prepare_library.py -h` for details on the options and example runs below. Note these scripted functionalities are a subset of what is possible with the code base. Please submit an [issue](https://github.com/DasLab/big_library_design/issues) if you want an additional library preparation method to be added to this main script.
 
 ```
 usage: prepare_library.py [-h] -i INPUT_FASTA -o OUTPUT_PREFIX [--check_library | --just_library | --window | --m2seq | --m2seq_with_double]
