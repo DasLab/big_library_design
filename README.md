@@ -11,12 +11,12 @@ A collection of functionalities for preparing library for RNA structure probing.
 ![example library](documentation/library_example.png)
 
 A library has the following features:
-- A 5' and 3' constant region identical for all sequences
+- A 5' and 3' constant region identical for all sequences can be specified with `--seq5` and `--seq3`.
 - A 3' barcode region to uniquely identify the sequence
 - A sequence of interest
 - Optionally padding regions to make the length of the library uniform
 
-Below we will focus on each of these features and the design decisions that can be make.
+Below we will focus on each of these features and the design decisions that can be made. Please note, the defaults are set to be generally applicable so not all options need to be set explictly by the user.
 
 ### Sequences of interest
 
@@ -45,7 +45,7 @@ You can find a full pipeline starting with window creation [below](#creating-lib
 
 ![example m2seq](documentation/m2seq_example.png)
 
-For mutate-map like expirements you can take a sequence and mutate all nucleotide to all possible other mutations. This results in 3 x sequence length mutations.
+For mutate-map like expirements you can take a sequence and mutate all nucleotide to all possible other mutations. This results in 3 x sequence length mutations. You can do this for multiple sequences, but we advise padding the sequences so they are all the same length
 
 You can find a full pipeline starting with single mutation creation [below](#creating-library-for-m2seq-all-single-mutants)
 
@@ -53,7 +53,7 @@ You can find a full pipeline starting with single mutation creation [below](#cre
 
 ![example double](documentation/double_example.png)
 
-We can also enumerate all possible double mutation (9 per nucleotide pair) between 2-regions. This results in 9 x length region A x length region B double mutants.
+We can also enumerate all possible double mutation (9 per nucleotide pair) between 2-regions. This results in 9 x length region A x length region B double mutants. The two regions can be specified using the `--doublemut` flag.
 
 You can find a full pipeline starting with single mutation creation [below](#creating-library-with-all-single-mutants-and-select-double)
 
@@ -68,16 +68,36 @@ For expiremental preperations of the library is it advantageous to have all sequ
 
 #### 1. Length of pad
 
-#### 2. Location of pad
+My default all shorter sequences will be padded to the length of the longest sequence, but if you would like all sequences to be padded to a certain length this can be specified using `--pad_to_length`.
 
-#### 3. Structure of pad
+#### 2. Structure of pad
+
+![stem parameters](documentation/stem_parameters.png)
+
+
+The structure of the pad is length dependent. If sufficiently long, as defined by the user, a stem will be formed, otherwise it will be all single stranded. The user can also specify a maximum length where a second stem is formed. Further the user can specify the length of polyA and random sequence hangs as well as the loop sequence. The above diagram describes the parameters that can be changed.
 
 See the `Structural checks` section to see how these structure constraints are enforced.
+
+#### 3. Location of pad
+
+![pad location](documentation/pad_sides.png)
+
+
+The defualt behavior for pad location is length dependent, where preference is to have the pad on the 3' end, but when too short to form a stem-loop or too long for just one stem-loop it is shared between the 3' and 5' ends, as displayed in the diagram above. The case for where length is larger than 2 helices is not implemented, reccomend just increasing the max_length_stem.
+
+While not scripted in any of our major functionality, you can specify to have the pad only located at the 5' or 3' end of the sequence of interest using the `pad_side` argument in [add_pad](https://github.com/DasLab/big_library_design/blob/76e070065f1019ea755810c33c90f930b807dba8/utils/mutational_utils.py#L596) and [add_library_elements](https://github.com/DasLab/big_library_design/blob/76e070065f1019ea755810c33c90f930b807dba8/utils/mutational_utils.py#L1195C5-L1195C25).
+
+
 
 
 ### Barcoding
 
 #### 1. Structure of barcode
+
+![barcode](documentation/barcode.png)
+
+Similiar to padding, the reccomended barcode structure is a stem and a hang is also reccomended to reduce the likelihood of helical stacking. The shape and length of the barcode can be specified with the parameters list in the figure above. Note only the random hang and base-pair region (pink) will be unique and hence encode the barcode. The polyA and loop have the same sequence, and the other side of the stem is complementary. Hence, the number of unique barcodes is 4^(numpbp + num5randomhang), this number is reduced significantly because some sequences do not fold correctly. `--min_edit` can be used to define the minimum distance between any pair of barcodes, it is reccomended to be at least 2 or 3. Note if you only have the stem barcoded, there is a minimum of 2 edit distance automatically. Finally, although polyA is specified if no barcode is found to fold correctly with this sequence after a number of iterations, it can be mutated, a warning will be printed.
 
 #### 2. Number of barcodes
 
@@ -89,18 +109,26 @@ The following structural checks aim to ensure the added sequences interfere with
 
 #### 1. Padding and barcode are all independent domain
 
-TODO image
+![structure check 1](documentation/struct_check1.png)
 
 We check that the 3' pad, 5' pad, and barcode do not interact with eachother, the sequence of interest, or the constant regions.
 
 #### 2. Padding and barcode fold as desired
 
-TODO image
+![structure check 2](documentation/struct_check2.png)
 
 We check that the 3' pad, 5' pad, and barcode all fold as requested. We check that hangs and loops are predicted to be unpaired and we check that the stems are predicted to form correctly.
 
+#### More details
+
+Sometimes, particularly with relativelt unstructured regions of interest, the algorithmn will fail to find a pad or barcode which is structurally sound. The protocol will then reduce the probabilities until it finds an answer. At a certain point if there is a polyA region in the pad or barcode it will start to mutate this as well. Warnings will be printed to notify the user of these changes. 
+
+It should be noted that we never check whether the sequence of interest interact with the 5' or 3' constant region because neither of these regions can be mutated to fix the issue. These interaction can be predicted and will show up in the base pair probaility matrices.
+
 
 ### Final library
+
+The final library can be written out in a variety of formats required by various synthesis companies including a fasta, csv, and txt file. Please submit an [issue](https://github.com/DasLab/big_library_design/issues) for any synthesis company perferred format that is not currently implemented.
 
 ## Example functionalities
 
