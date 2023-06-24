@@ -96,7 +96,7 @@ m2seq.add_argument('--pad_hang', type=int, default=3,
 m2seq.add_argument('--pad_num_samples', type=int, default=30,
                    help="Minimum number of sequences to check pad's effect on structure.")
 m2seq.add_argument('--pad_to_length', type=int, default=None,
-                     help='Length of sequnce to pad to, if nothing, longest length in fasta file.')
+                     help='Length of sequence to pad to, if nothing, longest length in fasta file.')
 
 double = parser.add_argument_group('double mutant')
 double.add_argument('--doublemut', nargs='+',

@@ -1,8 +1,10 @@
 # Das Lab Library Design
 
+A collection of functionalities for preparing library for RNA structure probing.
+
+
 ## This repository is currently under construction, please expect large changes to occur frequently while this message is here. Please submit [issues](https://github.com/DasLab/big_library_design/issues) or [pull requests](https://github.com/DasLab/big_library_design/pulls) for any bugs, thanks!
 
-A collection of functionalities for preparing library for RNA structure probing.
 
 ## About library design
 
@@ -16,15 +18,15 @@ A library has the following features:
 - A sequence of interest
 - Optionally padding regions to make the length of the library uniform
 
-Below we will focus on each of these features and the design decisions that can be made. Please note, the defaults are set to be generally applicable so not all options need to be set explictly by the user.
+Below we will focus on each of these features and the design decisions that can be made. Please note, the defaults are set to be generally applicable so not all options need to be set explicitly by the user.
 
 ### Sequences of interest
 
-There are many potential types of sequence sets that can be interesting to study. Below is the list of currently implemented options, please submit a issue for any desired features.
+There are many potential types of sequence sets that can be interesting to study. Below is the list of currently implemented options, please submit a [issue](https://github.com/DasLab/big_library_design/issues) for any desired features.
 
 #### List of sequences
 
-You can come with a list of sequences already prepared, see [library preperation below](#creating-library-from-already-prepared-sequence-list).
+You can come with a list of sequences already prepared, see [library preparation below](#creating-library-from-already-prepared-sequence-list).
 
 #### Windows of long sequences
 
@@ -34,20 +36,20 @@ Given a long sequence, or a set of long sequences, you can create windows of thi
 
 - The size of each window, `--length`.
 - The step between each window, `--step`.
-- When reaching the end of the sequence, you can choose to circualrize and attached the end (3') back to the (5') using `circularize`.
-- Instead of the sequence given you can use the reverse complement using `--reverse_complement`. We do not reccomend having the sense and anti-sense in the same library as the likelihood that they would bind eachother is high.
-- For infectious agents we advise never having the full genome in a single library, `--prop_windows_keep` or `--prop_windows_keep_random` can be used to reduce this safety concern, we reccomend using two thirds or less.
+- When reaching the end of the sequence, you can choose to circularize: attach the end (3') back to the (5'), using `--circularize`.
+- Instead of the sequence given, you can use the reverse complement using `--reverse_complement`. We do not recommend having the sense and anti-sense in the same library as the likelihood that they would bind to each other is high.
+- For infectious agents we advise never having the full genome in a single library, `--prop_windows_keep` or `--prop_windows_keep_random` can be used to reduce this safety concern, we recommend using two thirds or less.
 
 
-You can find a full pipeline starting with window creation [below](#creating-library-of-sliding-windows)
+You can find a full pipeline starting with window creation [below](#creating-library-of-sliding-windows).
 
 #### All single mutations of sequence of interest
 
 ![example m2seq](documentation/m2seq_example.png)
 
-For mutate-map like expirements you can take a sequence and mutate all nucleotide to all possible other mutations. This results in 3 x sequence length mutations. You can do this for multiple sequences, but we advise padding the sequences so they are all the same length
+For mutate-map like experiments you can take a sequence and mutate all nucleotide to all possible other mutations. This results in 3 x sequence length mutations. You can do this for multiple sequences, but we advise padding the sequences so they are all the same length
 
-You can find a full pipeline starting with single mutation creation [below](#creating-library-for-m2seq-all-single-mutants)
+You can find a full pipeline starting with single mutation creation [below](#creating-library-for-m2seq-all-single-mutants).
 
 #### All double mutations across pairs of regions
 
@@ -55,7 +57,7 @@ You can find a full pipeline starting with single mutation creation [below](#cre
 
 We can also enumerate all possible double mutation (9 per nucleotide pair) between 2-regions. This results in 9 x length region A x length region B double mutants. The two regions can be specified using the `--doublemut` flag.
 
-You can find a full pipeline starting with single mutation creation [below](#creating-library-with-all-single-mutants-and-select-double)
+You can find a full pipeline starting with single mutation creation [below](#creating-library-with-all-single-mutants-and-select-double).
 
 
 #### All rescue mutants of a list of base-pairs
@@ -64,18 +66,18 @@ While not scripted in any of our major functionality pipelines, this can be acco
 
 ### Padding
 
-For expiremental preperations of the library is it advantageous to have all sequences of interest be the same length. This can be accomplished by adding pads to the 5' and/or 3' ends of the sequence. Ideally these pads would not interact with eachother, the sequence of interest, or any other part of the construct. While short single-stranded pads can be created, longer sequences should be sequestered in stem-loop to prevent interaction with the sequence of interest. Further, to reduce the probability of stacking of the pad helices with the sequence of interest it is advised to maintain a hang region which is single stranded. The following decisions can be made:
+For experimental preparations of the library is it advantageous to have all sequences of interest be the same length. This can be accomplished by adding pads to the 5' and/or 3' ends of the sequence. Ideally these pads would not interact with each other, the sequence of interest, or any other part of the construct. While short single-stranded pads can be created, longer sequences should be sequestered in stem-loop to prevent interaction with the sequence of interest. Further, to reduce the probability of stacking of the pad helices with the sequence of interest it is advised to maintain a hang region which is single stranded. The following decisions can be made:
 
 #### 1. Length of pad
 
-My default all shorter sequences will be padded to the length of the longest sequence, but if you would like all sequences to be padded to a certain length this can be specified using `--pad_to_length`.
+By default all shorter sequences will be padded to the length of the longest sequence, but if you would like all sequences to be padded to a certain length this can be specified using `--pad_to_length`.
 
 #### 2. Structure of pad
 
-![stem parameters](documentation/stem_parameters.png)
+![stem parameters](documentation/stem_parameters.png | width=300)
 
 
-The structure of the pad is length dependent. If sufficiently long, as defined by the user, a stem will be formed, otherwise it will be all single stranded. The user can also specify a maximum length where a second stem is formed. Further the user can specify the length of polyA and random sequence hangs as well as the loop sequence. The above diagram describes the parameters that can be changed.
+The structure of the pad is length dependent. If sufficiently long, as defined by the user, a stem will be formed, otherwise it will be all single stranded. The user can also specify a maximum length where a second stem is formed. Further, the user can specify the length of polyA and random sequence hangs as well as the loop sequence. The above diagram describes the parameters that can be changed.
 
 See the `Structural checks` section to see how these structure constraints are enforced.
 
@@ -84,7 +86,7 @@ See the `Structural checks` section to see how these structure constraints are e
 ![pad location](documentation/pad_sides.png)
 
 
-The defualt behavior for pad location is length dependent, where preference is to have the pad on the 3' end, but when too short to form a stem-loop or too long for just one stem-loop it is shared between the 3' and 5' ends, as displayed in the diagram above. The case for where length is larger than 2 helices is not implemented, reccomend just increasing the max_length_stem.
+The default behavior for pad location is length dependent, where preference is to have the pad on the 3' end, but when too short to form a stem-loop or too long for just one stem-loop it is shared between the 3' and 5' ends, as displayed in the diagram above. The case for where length is larger than 2 helices is not implemented, recommend just increasing the max_length_stem.
 
 While not scripted in any of our major functionality, you can specify to have the pad only located at the 5' or 3' end of the sequence of interest using the `pad_side` argument in [add_pad](https://github.com/DasLab/big_library_design/blob/76e070065f1019ea755810c33c90f930b807dba8/utils/mutational_utils.py#L596) and [add_library_elements](https://github.com/DasLab/big_library_design/blob/76e070065f1019ea755810c33c90f930b807dba8/utils/mutational_utils.py#L1195C5-L1195C25).
 
@@ -95,9 +97,11 @@ While not scripted in any of our major functionality, you can specify to have th
 
 #### 1. Structure of barcode
 
-![barcode](documentation/barcode.png)
+![barcode](documentation/barcode.png |  width=300)
 
-Similiar to padding, the reccomended barcode structure is a stem and a hang is also reccomended to reduce the likelihood of helical stacking. The shape and length of the barcode can be specified with the parameters list in the figure above. Note only the random hang and base-pair region (pink) will be unique and hence encode the barcode. The polyA and loop have the same sequence, and the other side of the stem is complementary. Hence, the number of unique barcodes is 4^(numpbp + num5randomhang), this number is reduced significantly because some sequences do not fold correctly. `--min_edit` can be used to define the minimum distance between any pair of barcodes, it is reccomended to be at least 2 or 3. Note if you only have the stem barcoded, there is a minimum of 2 edit distance automatically. Finally, although polyA is specified if no barcode is found to fold correctly with this sequence after a number of iterations, it can be mutated, a warning will be printed.
+Similar to padding, the recommended barcode structure is a stem and a hang is also recommended to reduce the likelihood of helical stacking. The shape and length of the barcode can be specified with the parameters list in the figure above. Note only the random hang and base-pair region (pink) will be unique and hence encode the barcode. The polyA and loop have the same sequence, and the other side of the stem is complementary. Hence, the number of unique barcodes is 4^(numpbp + num5randomhang), this number is reduced significantly because some sequences do not fold correctly. Aiming to have at least 10x the number of possible barcodes than you library size is a reasonable rule of thumb.
+
+ `--min_edit` can be used to define the minimum distance between any pair of barcodes, it is recommended to be at least 2 or 3. Note if you only have the stem barcoded, there is a minimum of 2 edit distance automatically, hence processing time will be faster.
 
 #### 2. Number of barcodes
 
@@ -105,13 +109,13 @@ NOT YET IMPLEMENTED. As barcodes can potentially influence the behavior of your 
 
 ### Structural checks
 
-The following structural checks aim to ensure the added sequences interfere with the sequence of interest during the experimental reacivity study.
+The following structural checks aim to ensure the added sequences interfere with the sequence of interest during the experimental reactivity study.
 
-#### 1. Padding and barcode are all independent domain
+#### 1. Padding and barcode are independently folded domains
 
 ![structure check 1](documentation/struct_check1.png)
 
-We check that the 3' pad, 5' pad, and barcode do not interact with eachother, the sequence of interest, or the constant regions.
+We check that the 3' pad, 5' pad, and barcode do not interact with each other, the sequence of interest, or the constant regions.
 
 #### 2. Padding and barcode fold as desired
 
@@ -121,14 +125,14 @@ We check that the 3' pad, 5' pad, and barcode all fold as requested. We check th
 
 #### More details
 
-Sometimes, particularly with relativelt unstructured regions of interest, the algorithmn will fail to find a pad or barcode which is structurally sound. The protocol will then reduce the probabilities until it finds an answer. At a certain point if there is a polyA region in the pad or barcode it will start to mutate this as well. Warnings will be printed to notify the user of these changes. 
+Sometimes, particularly with relatively unstructured regions of interest, the algorithm will fail to find a pad or barcode which is structurally sound. The protocol will then reduce the probability thresholds until it finds an answer. At a certain point, if there is a polyA region in the pad or barcode, it will start to mutate this as well. Warnings will be printed to notify the user of these changes. 
 
-It should be noted that we never check whether the sequence of interest interact with the 5' or 3' constant region because neither of these regions can be mutated to fix the issue. These interaction can be predicted and will show up in the base pair probaility matrices.
+It should be noted that we never check whether the sequence of interest interact with the 5' or 3' constant region because neither of these regions can be mutated to fix the issue. These interactions can be predicted and will show up in the base pair probability matrices.
 
 
 ### Final library
 
-The final library can be written out in a variety of formats required by various synthesis companies including a fasta, csv, and txt file. Please submit an [issue](https://github.com/DasLab/big_library_design/issues) for any synthesis company perferred format that is not currently implemented.
+The final library can be written out in a variety of formats required by various synthesis companies including a fasta, csv, and txt file. Please submit an [issue](https://github.com/DasLab/big_library_design/issues) for any synthesis company preferred format that is not currently implemented.
 
 ## Example functionalities
 
@@ -225,7 +229,7 @@ padding for: m2seq or just_library when length not equal:
   --pad_num_samples PAD_NUM_SAMPLES
                         Minimum number of sequences to check pad's effect on structure. (default: 30)
   --pad_to_length PAD_TO_LENGTH
-                        Length of sequnce to pad to, if nothing, longest length in fasta file. (default: None)
+                        Length of sequence to pad to, if nothing, longest length in fasta file. (default: None)
 
 double mutant:
   --doublemut DOUBLEMUT [DOUBLEMUT ...]
