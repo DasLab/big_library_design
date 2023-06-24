@@ -20,6 +20,16 @@ A library has the following features:
 
 Below we will focus on each of these features and the design decisions that can be made. Please note, the defaults are set to be generally applicable so not all options need to be set explicitly by the user.
 
+[Sequences of interest](#sequences-of-interest)
+
+[Padding](#padding)
+
+[Barcoding](#barcoding)
+
+[Structural checks](#structural-checks)
+
+
+
 ### Sequences of interest
 
 There are many potential types of sequence sets that can be interesting to study. Below is the list of currently implemented options, please submit a [issue](https://github.com/DasLab/big_library_design/issues) for any desired features.
