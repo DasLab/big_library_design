@@ -24,13 +24,32 @@ There are many potential types of sequence sets that can be interesting to study
 
 #### List of sequences
 
-You can come with a list of sequences already prepared, see [library preperation below](###Creating-library-from-already-prepared-sequence-list).
+You can come with a list of sequences already prepared, see [library preperation below](###creating-library-from-already-prepared-sequence-list).
 
 #### Windows of long sequences
 
+Given a long sequence, or a set of long sequences, you can create windows of this sequence of a specified length. You can decide the following options:
+
+- The size of each window, `--length`.
+- The step between each window, `--step`.
+- When reaching the end of the sequence, you can choose to circualrize and attached the end (3') back to the (5') using `circularize`.
+- Instead of the sequence given you can use the reverse complement using `--reverse_complement`. We do not reccomend having the sense and anti-sense in the same library as the likelihood that they would bind eachother is high.
+- For infectious agents we advise never having the full genome in a single library, `--prop_windows_keep` or `--prop_windows_keep_random` can be used to reduce this safety concern, we reccomend using two thirds or less.
+
+
+You can find a full pipeline starting with window creation [below](#creating-library-of-sliding-windows)
+
 #### All single mutations of sequence of interest
 
+TODO image
+
+For mutate-map like expirements you can take a sequence and mutate all nucleotide to all possible other mutations. This results in 3 x sequence length mutations.
+
 #### All double mutations across pairs of regions
+
+TODO image
+
+We can also enumerate all possible double mutation (9 per nucleotide pair) between 2-regions. This results in 9 x length region A x length region B double mutants.
 
 #### All rescue mutants of a list of base-pairs
 
