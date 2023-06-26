@@ -1,0 +1,15 @@
+name: big_lib
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - numpy=1.24.2
+  - pandas=2.0.0
+  - matplotlib=3.7.1
+  - pip=23.0.1
+  - pip:
+    - biopython==1.73
+    - Levenshtein==0.21.1
+    - pybktree==1.1
+    - tqdm==4.65.0

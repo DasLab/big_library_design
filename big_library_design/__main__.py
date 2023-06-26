@@ -1,5 +1,5 @@
 import argparse
-from utils.mutational_utils import *
+from big_library_design.mutational_utils import *
 
 ###############################################################################
 # Arguments

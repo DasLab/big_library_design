@@ -21,3 +21,6 @@ GPN/
 commands_for_GPN.txt
 05232023_library.fasta
 230601_GPN_library_RCK_edit.*
+build
+*egg*
+__pycache__

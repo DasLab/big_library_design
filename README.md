@@ -6,6 +6,29 @@ A collection of functionalities for preparing library for RNA structure probing.
 ## This repository is currently under construction, please expect large changes to occur frequently while this message is here. Please submit [issues](https://github.com/DasLab/big_library_design/issues) or [pull requests](https://github.com/DasLab/big_library_design/pulls) for any bugs, thanks!
 
 
+## Install
+
+```
+git clone git@github.com:DasLab/big_library_design.git
+cd big_library_design
+```
+
+For calculating the probabilities, we currently use [eternfold](https://github.com/eternagame/EternaFold) and the wrappers in [arnie](https://github.com/DasLab/arnie). Otherwise, this package has minimal dependencies but these can be installed into a conda environment using
+
+```
+conda env create -f environment.yml
+conda activate big_lib
+```
+
+Finally the package can be installed 
+
+```
+pip install .
+```
+
+This will make the main scripted functionalities available with `python -m big_library_designy -h`.
+
+
 ## About library design
 
 ### General library format
@@ -152,7 +175,7 @@ The final library can be written out in a variety of formats required by various
 
 ## Example functionalities
 
-Major functionalities have been scripted in `prepare_library.py`. Please see `python prepare_library.py -h` for details on the options and example runs below. Note these scripted functionalities are a subset of what is possible with the code base. Please submit an [issue](https://github.com/DasLab/big_library_design/issues) if you want an additional library preparation method to be added to this main script.
+Major functionalities have been scripted. Please see `python -m big_library_designy -h` for details on the options and example runs below. Note these scripted functionalities are a subset of what is possible with the code base. Please submit an [issue](https://github.com/DasLab/big_library_design/issues) if you want an additional library preparation method to be added to this main script.
 
 ```
 usage: prepare_library.py [-h] -i INPUT_FASTA -o OUTPUT_PREFIX [--check_library | --just_library | --window | --m2seq | --m2seq_with_double]
@@ -260,7 +283,7 @@ double mutant:
 ### Creating library from already prepared sequence list
 
 ```
-python prepare_library.py --just_library -i examples/example_WT.fasta -o examples/just_library_ex_output/example --save_bpp_fig 1 --save_image_folder examples/just_library_ex_output/figs/
+python -m big_library_design --just_library -i examples/example_WT.fasta -o examples/just_library_ex_output/example --save_bpp_fig 1 --save_image_folder examples/just_library_ex_output/figs/
 ```
 
 Example output is in `examples/just_library_ex_output`, note you should not expect to see same padding or barcodes as these are randomly generated. 
@@ -268,7 +291,7 @@ Example output is in `examples/just_library_ex_output`, note you should not expe
 ### Creating library of sliding windows
 
 ```
-python prepare_library.py --window -i examples/example_WT.fasta -o examples/window_ex_output/example --length 100 --step 10 --Pmax_noninteract 0.15 --prop_windows_keep 0.6667 --save_bpp_fig 1 --save_image_folder examples/window_ex_output/figs/ --max_seq_punpaired_plot 20
+python -m big_library_design --window -i examples/example_WT.fasta -o examples/window_ex_output/example --length 100 --step 10 --Pmax_noninteract 0.15 --prop_windows_keep 0.6667 --save_bpp_fig 1 --save_image_folder examples/window_ex_output/figs/ --max_seq_punpaired_plot 20
 ```
 
 Example output is in `examples/window_ex_output`, note you should not expect exact same sequences as barcodes are randomly generated. Only 1 example base-pair-probability matrix figure uploaded to this github, but this call will generate one for all sequences.
@@ -276,15 +299,15 @@ Example output is in `examples/window_ex_output`, note you should not expect exa
 ### Creating library for M2Seq (all single-mutants)
 
 ```
-python prepare_library.py --m2seq -i examples/example_WT.fasta -o examples/m2seq_ex_output/example --Pmax_noninteract 0.15 --Pmin_paired 0.7 --Pavg_paired 0.8 --Pmin_unpaired 0.6 --Pmin_unpaired 0.8 --save_bpp_fig 1 --save_image_folder examples/m2seq_ex_output/figs/
+python -m big_library_design --m2seq -i examples/example_WT.fasta -o examples/m2seq_ex_output/example --Pmax_noninteract 0.15 --Pmin_paired 0.7 --Pavg_paired 0.8 --Pmin_unpaired 0.6 --Pmin_unpaired 0.8 --save_bpp_fig 1 --save_image_folder examples/m2seq_ex_output/figs/
 ```
 
-Example output is in `examples/m2seq_ex_output`, note you should expect to see the same mutants in the region of interest, but you should not expect to see same pads or barcodes. Only 1 example base-pair-probability matrix figure is uploaded to this github, but this call will generate one for every sequence in the libaray.
+Example output is in `examples/m2seq_ex_output`, note you should expect to see the same mutants in the region of interest, but you should not expect to see same pads or barcodes. Only 1 example base-pair-probability matrix figure is uploaded to this github, but this call will generate one for every sequence in the library.
 
 ### Creating library with all single-mutants and select double
 
 ```
-python prepare_library.py --m2seq_with_double -i examples/example_WT.fasta -o examples/double_ex_output/example --Pmax_noninteract 0.15 --Pmin_paired 0.7 --Pavg_paired 0.8 --Pmin_unpaired 0.6 --Pmin_unpaired 0.8 --doublemut 20-23.24-28 56.82,90 130,140.150-151 --save_bpp_fig 1 --save_image_folder examples/double_ex_output/figs/
+python -m big_library_design --m2seq_with_double -i examples/example_WT.fasta -o examples/double_ex_output/example --Pmax_noninteract 0.15 --Pmin_paired 0.7 --Pavg_paired 0.8 --Pmin_unpaired 0.6 --Pmin_unpaired 0.8 --doublemut 20-23.24-28 56.82,90 130,140.150-151 --save_bpp_fig 1 --save_image_folder examples/double_ex_output/figs/
 ```
 
-Example output is in `examples/double_ex_output`, note you should expect to see the same mutants in the region of interest, but you should not expect to see same pads or barcodes. Only 1 example base-pair-probability matrix figure is uploaded to this github, but this call will generate one for every sequence in the libaray.
+Example output is in `examples/double_ex_output`, note you should expect to see the same mutants in the region of interest, but you should not expect to see same pads or barcodes. Only 1 example base-pair-probability matrix figure is uploaded to this github, but this call will generate one for every sequence in the library.
