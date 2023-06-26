@@ -84,7 +84,7 @@ By default all shorter sequences will be padded to the length of the longest seq
 
 #### 2. Structure of pad
 
-![stem parameters](documentation/stem_parameters.png | width=300)
+<img src="documentation/stem_parameters.png" width="300"> 
 
 
 The structure of the pad is length dependent. If sufficiently long, as defined by the user, a stem will be formed, otherwise it will be all single stranded. The user can also specify a maximum length where a second stem is formed. Further, the user can specify the length of polyA and random sequence hangs as well as the loop sequence. The above diagram describes the parameters that can be changed.
@@ -107,7 +107,8 @@ While not scripted in any of our major functionality, you can specify to have th
 
 #### 1. Structure of barcode
 
-![barcode](documentation/barcode.png |  width=300)
+<img src="documentation/barcode.png" width="300"> 
+
 
 Similar to padding, the recommended barcode structure is a stem and a hang is also recommended to reduce the likelihood of helical stacking. The shape and length of the barcode can be specified with the parameters list in the figure above. Note only the random hang and base-pair region (pink) will be unique and hence encode the barcode. The polyA and loop have the same sequence, and the other side of the stem is complementary. Hence, the number of unique barcodes is 4^(numpbp + num5randomhang), this number is reduced significantly because some sequences do not fold correctly. Aiming to have at least 10x the number of possible barcodes than you library size is a reasonable rule of thumb.
 
