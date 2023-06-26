@@ -695,8 +695,8 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                     full_seq = pad5+_get_dna_from_SeqRecord(seq)+pad3
                     full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}'
                     struct_results = check_struct_bpp(full_seq,
-                                                      regions['unpaired'], regions['pairedA'],
-                                                      regions['pairedB'], regions['noninteractA'], regions['noninteractB'],
+                                                      regions['unpaired'], [regions['pairedA']],
+                                                      [regions['pairedB']], regions['noninteractA'], regions['noninteractB'],
                                                       epsilon_interaction=epsilon_interaction,
                                                       epsilon_punpaired=epsilon_punpaired,
                                                       epsilon_avg_punpaired=epsilon_avg_punpaired,
@@ -764,8 +764,8 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                     # get full sequence and check its structure
                     full_seq = pad5 + _get_dna_from_SeqRecord(seq) + pad3
                     struct_results = check_struct_bpp(full_seq,
-                                                      regions['unpaired'], regions['pairedA'],
-                                                      regions['pairedB'], regions['noninteractA'], regions['noninteractB'],
+                                                      regions['unpaired'], [regions['pairedA']],
+                                                      [regions['pairedB']], regions['noninteractA'], regions['noninteractB'],
                                                       epsilon_interaction=epsilon_interaction,
                                                       epsilon_punpaired=epsilon_punpaired,
                                                       epsilon_avg_punpaired=epsilon_avg_punpaired,
@@ -856,8 +856,8 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
 
                         # get full sequence and check its structure
                         full_seq = pad5 + _get_dna_from_SeqRecord(seq) + pad3
-                        struct_results = check_struct_bpp(full_seq, regions['unpaired'], regions['pairedA'],
-                                                          regions['pairedB'], regions['noninteractA'], regions['noninteractB'],
+                        struct_results = check_struct_bpp(full_seq, regions['unpaired'], [regions['pairedA']],
+                                                          [regions['pairedB']], regions['noninteractA'], regions['noninteractB'],
                                                           epsilon_interaction=epsilon_interaction,
                                                           epsilon_punpaired=epsilon_punpaired,
                                                           epsilon_avg_punpaired=epsilon_avg_punpaired,
@@ -1128,8 +1128,8 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
                 save_image, plot_lines = None, None
 
             struct_results = check_struct_bpp(full_seq, region_unpaired,
-                                              region_paired_A, region_paired_B,
-                                              regionA, regionB,
+                                              [region_paired_A], [region_paired_B],
+                                              [regionA], [regionB],
                                               epsilon_interaction=epsilon_interaction,
                                               epsilon_punpaired=epsilon_punpaired,
                                               epsilon_avg_punpaired=epsilon_avg_punpaired,
@@ -1206,7 +1206,7 @@ def add_library_elements(fasta, out_fasta=None,
                               punpaired_chunk_size=500, used_barcodes=[],
                               num_barcode_before_reduce=100,
                               percent_reduce_prob=10, min_edit=2,
-                              pad_loop=TETRALOOP, pad_hang=3, pad_polyAhang=0, pad_min_num_samples=30,
+                              pad_loop=TETRALOOP, pad_hang=0, pad_polyAhang=3, pad_min_num_samples=30,
             pad_max_prop_bad=0.05, pad_side='both',
             min_length_stem=4, max_length_stem=12,
             num_pads_reduce=100, pad_to_length=None):
@@ -1220,7 +1220,8 @@ def add_library_elements(fasta, out_fasta=None,
 
         share_pad (str): either all different pads (none),
             all same for sequences of same length (same_length),
-            all same where sequence of different length are just truncated (all)
+            all same where sequ    Given a fasta of sequence pad all sequence to the same length
+ence of different length are just truncated (all)
         pad_loop (str): constant sequence for loop of stem-loop
         pad_hang (int): distance between sequence and the stem will be this or this+1, random sequence (default 3)
         pad_polyAhang (int): distance between sequence and the stem will be this or this+1, polyA (default 3)
@@ -1312,6 +1313,9 @@ def add_library_elements(fasta, out_fasta=None,
     # if want all pads to be random
     if share_pad == 'none':
         print("Getting random pads for each sequence, not guaranteed to be unique.")
+        if min_edit!=2 and barcode_num5hang!=0:
+            print("WARNING: the new pad+barcode code for no sharing of barcodes is only currently implemented for stem-only barcodes and edit distance of 2")
+
         lib = []
 
         # get and randomly shuffle all potential barcodes
@@ -1340,11 +1344,13 @@ def add_library_elements(fasta, out_fasta=None,
             regionA = list(range(regions_barcode[0], regions_barcode[1]))
             regionA2 = list(range(0,regions_barcode[0]))+ list(range(regions_barcode[2],regions_barcode[2]+len(seq3)))
             regionB = list(range(regions_barcode[1], regions_barcode[2]))
-            # TODO need to fix this logic in code below
             # pad should also not interact with 5' and 3' regions, nor barcode
-            regions['noninteractB'].extend(regionB)
-            regions['noninteractB'].extend(regionA2)
+            for x in regions['noninteractB']:
+                x.extend(regionB)
+                x.extend(regionA2)
             regionA.extend(regionA2)
+            regions['noninteractB'] = [regionA] + regions['noninteractB'] 
+            regions['noninteractA'] = [regionB] + regions['noninteractA'] 
             region_unpaired = [list(range(regions_barcode[1],
                                           regions_barcode[1]+barcode_num5hang+barcode_num5polyA)),
                                list(range(regions_barcode[2]-barcode_num_bp-len(barcode_loop),
@@ -1352,20 +1358,26 @@ def add_library_elements(fasta, out_fasta=None,
             region_paired_A = list(range(regions_barcode[1]+barcode_num5hang+barcode_num5polyA,
                                          regions_barcode[2]-barcode_num_bp-len(barcode_loop)))
             region_paired_B = list(range(regions_barcode[2]-barcode_num_bp, regions_barcode[2]))[::-1]
-
+            regions['pairedA'] = [region_paired_A, regions['pairedA']]
+            regions['pairedB'] = [region_paired_B, regions['pairedB']]
+            regions['unpaired'] = region_unpaired + regions['unpaired']
+            print(f"Searching for pad for group len {pad_length}.")
+            print(f"Finding a {structs['5']['N']}nt 5' pad with {structs['5']['bp']}bp stem {structs['5']['hang_rand']}nt random hang {structs['5']['hang_polyA']}nt polyA hang.")
+            print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
             # for each sequence search for good_pad
             for seq in tqdm(list(seqs)):
                 good_pad = False
                 # if tried enough relax the probability contstraints
                 prob_factor = {}
                 seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
-                for type_error, count in seq_count.items():
-                    mutiplier = (count // num_pads_reduce)
-                    prob_factor[type_error] = porp_reduce**mutiplier
-                    if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
-                        seq_count[type_error] += 1
-                        print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
+
                 while not good_pad:
+                    for type_error, count in seq_count.items():
+                        mutiplier = (count // num_pads_reduce)
+                        prob_factor[type_error] = porp_reduce**mutiplier
+                        if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
+                            seq_count[type_error] += 1
+                            print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
                     # get random pad
 
                     pad5 = _get_random_barcode(num_bp=structs["5"]['bp'],
@@ -1382,42 +1394,22 @@ def add_library_elements(fasta, out_fasta=None,
 
                     barcode_count = 0
                     uid_good = False
-                    # TODO random 20
-                    while barcode_count < 20 and not uid_good:
+                    # TODO random 20 barcode_count < 20 and
+                    while not uid_good and barcode_count<20:
                         # check barcode folds and barcode does not interact with sequence
 
                         # TODO need to check uniqueness!!! edit distance and other logic in original code
                         barcode = _get_dna_from_SeqRecord(all_uids[current_uid])
 
-                        #print(barcode)
-
                         full_seq = seq5 + pad5 + _get_dna_from_SeqRecord(seq) + pad3 + barcode + seq3
-
-                        #print(region_unpaired)
-                        #print(full_seq)
-                        #print(barcode)
-                        struct_results = check_struct_bpp(full_seq, region_unpaired,
-                                                  region_paired_A, region_paired_B,
-                                                  regionA, regionB,
-                                                  epsilon_interaction=epsilon_interaction,
-                                                  epsilon_punpaired=epsilon_punpaired,
-                                                  epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                  epsilon_paired=epsilon_paired,
-                                                  epsilon_avg_paired=epsilon_avg_paired,
-                                                  prob_factor=prob_factor,save_image='test.png')# TODO
-                        #print(struct_results)
-                        uid_good = struct_results["pass"]
-                        #print(struct_results)
-                        current_uid += 1
-                        barcode_count += 1
-
-                    # get full sequence and check structure
-                    #full_seq = pad5+_get_dna_from_SeqRecord(seq)+pad3
-                    #full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}'
-                    if uid_good:
-
-                        # TODO save image need the prob factor
                         full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}_libraryready'
+
+                        # check if structure correct, save picture if specified and chance has it
+                        if (save_image_folder is not None) and (random() < save_bpp_fig):
+                            save_image = f'{save_image_folder}/{full_seq_name}.png'
+                            plot_lines = None # TODO lines
+                        else:
+                            save_image, plot_lines = None, None
                         struct_results = check_struct_bpp(full_seq, regions['unpaired'], 
                                                           regions['pairedA'], regions['pairedB'], 
                                                           regions['noninteractA'], regions['noninteractB'],
@@ -1426,16 +1418,42 @@ def add_library_elements(fasta, out_fasta=None,
                                                           epsilon_avg_punpaired=epsilon_avg_punpaired,
                                                           epsilon_paired=epsilon_paired,
                                                           epsilon_avg_paired=epsilon_avg_paired,
-                                                          save_image=f'{save_image_folder}/{full_seq_name}.png')
+                                                          save_image=save_image,prob_factor=prob_factor)
+
+                        # if barcode fails, get new barcode and start again
+                        barcode_fail = False
+                        if len(struct_results['paired_fail'])>0:
+                            if struct_results['paired_fail'][0][0] == 0:
+                                barcode_fail = True
+                        if len(struct_results['unpaired_fail'])>0:
+                            if struct_results['unpaired_fail'][0][0] < len(region_unpaired):
+                                barcode_fail = True
+                        if len(struct_results['interaction_fail'])>0:
+                            if struct_results['interaction_fail'][0][0] == 0:
+                                barcode_fail = True
+                            
+                        # if barcode is good,
+                        if not barcode_fail:
+                            uid_good = True
+                        
                         good_pad = struct_results["pass"]
-                    if not good_pad or not uid_good:
+                        current_uid += 1
+                        barcode_count += 1
+
+                    # TODO punpaired
+
+                    # if its non interact 2 then its barcode needs revamped, otherwise pad                    
+                    
+                    # get full sequence and check structure
+                    if not good_pad:
                         seq_count = _update_seq_count(seq_count,struct_results)
                 # if pass add final sequence
                 padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
                                              full_seq_name, '', '')
                 lib.append(padded_seq)
-        print("ERROR not implemented")
         # save
+        SeqIO.write(lib, out_fasta, "fasta")
+        print(f'Saved all padded sequences to {out_fasta}.')
 
     # if want sequences of same length to share same pad
     elif share_pad == 'same_length':
@@ -1450,20 +1468,27 @@ def add_library_elements(fasta, out_fasta=None,
                 pads_by_len[len_group] = ['', '']
                 continue
 
-            print(f"Searching for pad for group len {len_group}")
+            print(f"Searching for pad for group len {len_group}.")
 
             # split length of pad to either end of the sequence and get regions
             structs, regions = _get_5_3_split(length_to_add, pad_hang, pad_polyAhang,
                                               min_length_stem, max_length_stem,
                                               pad_side, pad_loop, len_group,offset=len(seq5))
 
-            # add barcode structural regions
+            # barcode structural regions
             regions_barcode = [len(seq5), len(seq5)+desired_len,
                        len(seq5)+desired_len+barcode_num5hang+barcode_num5polyA+(2*barcode_num_bp)+len(barcode_loop)]
+            # barcode should not interact with sequence nor 5' or 3'
             regionA = list(range(regions_barcode[0], regions_barcode[1]))
-            regionB = list(range(0,regions_barcode[0]))+list(range(regions_barcode[1], regions_barcode[2]+len(seq3)))
+            regionA2 = list(range(0,regions_barcode[0]))+ list(range(regions_barcode[2],regions_barcode[2]+len(seq3)))
+            regionB = list(range(regions_barcode[1], regions_barcode[2]))
             # pad should also not interact with 5' and 3' regions, nor barcode
-            regions['noninteractB'].extend(regionB)
+            for x in regions['noninteractB']:
+                x.extend(regionB)
+                x.extend(regionA2)
+            regionA.extend(regionA2)
+            regions['noninteractB'] = [regionA] + regions['noninteractB'] 
+            regions['noninteractA'] = [regionB] + regions['noninteractA'] 
             region_unpaired = [list(range(regions_barcode[1],
                                           regions_barcode[1]+barcode_num5hang+barcode_num5polyA)),
                                list(range(regions_barcode[2]-barcode_num_bp-len(barcode_loop),
@@ -1471,26 +1496,23 @@ def add_library_elements(fasta, out_fasta=None,
             region_paired_A = list(range(regions_barcode[1]+barcode_num5hang+barcode_num5polyA,
                                          regions_barcode[2]-barcode_num_bp-len(barcode_loop)))
             region_paired_B = list(range(regions_barcode[2]-barcode_num_bp, regions_barcode[2]))[::-1]
-
+            regions['pairedA'] = [region_paired_A, regions['pairedA'], ]
+            regions['pairedB'] = [region_paired_B, regions['pairedB']]
+            regions['unpaired'] = region_unpaired + regions['unpaired']
 
             print(f"Finding a {structs['5']['N']}nt 5' pad with {structs['5']['bp']}bp stem {structs['5']['hang_rand']}nt random hang {structs['5']['hang_polyA']}nt polyA hang.")
             print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
 
             # loop through to find pad that works
             good_pad = False
+            prob_factor = {}
             seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
             # current_pad = 0
             while not good_pad:
 
                 # if tried enough relax the probability contstraints
-                prob_factor = {}
-                for type_error, count in seq_count.items():
-                    mutiplier = (count // num_pads_reduce)
-                    prob_factor[type_error] = porp_reduce**mutiplier
-                    if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
-                        seq_count[type_error] += 1
-                        print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
-
+                
+                
                 # get random pad
                 pad5 = _get_random_barcode(num_bp=structs["5"]['bp'],
                                            num3hang=structs["5"]['hang_rand'],
@@ -1506,44 +1528,60 @@ def add_library_elements(fasta, out_fasta=None,
                 for i, seq in enumerate(seqs):
                     #if i % 50 == 0 and i != 0:
                     #    print(i)
+                    
 
                     barcode_count = 0
                     uid_good = False
                     while barcode_count < 20 and not uid_good:
+                        for type_error, count in seq_count.items():
+                            mutiplier = (count // num_pads_reduce)
+                            prob_factor[type_error] = porp_reduce**mutiplier
+                            if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
+                                seq_count[type_error] += 1
+                                print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
                         # check barcode folds and barcode does not interact with sequence
                         barcode = _get_random_barcode(num_bp=barcode_num_bp,
                                                   loop=barcode_loop, 
                                                   num5hang=barcode_num5hang,
                                                   polyA5=barcode_num5polyA)
                         full_seq = seq5 + pad5 + _get_dna_from_SeqRecord(seq) + pad3 + barcode + seq3
-                        struct_results = check_struct_bpp(full_seq, region_unpaired,
-                                                  region_paired_A, region_paired_B,
-                                                  regionA, regionB,
-                                                  epsilon_interaction=epsilon_interaction,
-                                                  epsilon_punpaired=epsilon_punpaired,
-                                                  epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                  epsilon_paired=epsilon_paired,
-                                                  epsilon_avg_paired=epsilon_avg_paired,
-                                                  prob_factor=prob_factor)
-                        uid_good = struct_results["pass"]
-                        barcode_count+=1
-                    
-                    # check pad folds and pad does not interact with sequence or others
-                    struct_results = check_struct_bpp(full_seq,
-                                                      regions['unpaired'], regions['pairedA'],
-                                                      regions['pairedB'], regions['noninteractA'], regions['noninteractB'],
-                                                      epsilon_interaction=epsilon_interaction,
-                                                      epsilon_punpaired=epsilon_punpaired,
-                                                      epsilon_avg_punpaired=epsilon_avg_punpaired,
-                                                      epsilon_paired=epsilon_paired,
-                                                      epsilon_avg_paired=epsilon_avg_paired,
-                                                      prob_factor=prob_factor,save_image='test')
 
-                    # if not good structure add to count
-                    # stop if reached maximal bad
-                    good_pad = struct_results["pass"]
-                    if not good_pad or not uid_good:
-                        seq_count = _update_seq_count(seq_count,struct_results)
+                        # check if structure correct, save picture if specified and chance has it
+                        struct_results = check_struct_bpp(full_seq, regions['unpaired'], 
+                                                          regions['pairedA'], regions['pairedB'], 
+                                                          regions['noninteractA'], regions['noninteractB'],
+                                                          epsilon_interaction=epsilon_interaction,
+                                                          epsilon_punpaired=epsilon_punpaired,
+                                                          epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                          epsilon_paired=epsilon_paired,
+                                                          epsilon_avg_paired=epsilon_avg_paired)
+
+                        # if barcode fails, get new barcode and start again
+                        barcode_fail = False
+                        if len(struct_results['paired_fail'])>0:
+                            if struct_results['paired_fail'][0][0] == 0:
+                                barcode_fail = True
+                        if len(struct_results['unpaired_fail'])>0:
+                            if struct_results['unpaired_fail'][0][0] < len(region_unpaired):
+                                barcode_fail = True
+                        if len(struct_results['interaction_fail'])>0:
+                            if struct_results['interaction_fail'][0][0] == 0:
+                                barcode_fail = True
+                            
+                        # if barcode is good,
+                        if not barcode_fail:
+                            uid_good = True
+                        
+                        good_pad = struct_results["pass"]
+                        barcode_count += 1
+                    
+                        # check pad folds and pad does not interact with sequence or others
+
+                        # if not good structure add to count
+                        # stop if reached maximal bad
+                        if not good_pad:
+                            seq_count = _update_seq_count(seq_count,struct_results)
+                    if not good_pad:
                         bad_count += 1
                         if bad_count >= max_bad_structs[len_group]:
                             break
@@ -1650,23 +1688,27 @@ def check_struct_bpp(seq, regions_unpaired=None, region_paired_A=None,
     results = {"unpaired_fail": [], "paired_fail": [],
                "interaction_fail": [], "p_unpaired": p_unpaired}
     if regions_unpaired is not None:
-        for region_unpaired in regions_unpaired:
+        for i,region_unpaired in enumerate(regions_unpaired):
             if region_unpaired != []:
                 punpaired_check = p_unpaired[region_unpaired]
                 if ((punpaired_check.mean() < epsilon_avg_punpaired*prob_factor['unpaired']) or
                         (punpaired_check.min() < epsilon_punpaired*prob_factor['unpaired'])):
-                    results["unpaired_fail"].extend(region_unpaired)
+                    results["unpaired_fail"].append([i,region_unpaired])
 
     if regionA is not None and regionA != [] and regionB != []:
-        interaction_check = bpp[regionA][:, regionB]
-        if (interaction_check.max() > epsilon_interaction/prob_factor['interaction']):
-            results["interaction_fail"].append([regionA, regionB])
+        for i,(regA,regB) in enumerate(zip(regionA,regionB)):
+            if regA != [] and regB != []:
+                interaction_check = bpp[regA][:, regB]
+                if (interaction_check.max() > epsilon_interaction/prob_factor['interaction']):
+                    results["interaction_fail"].append([i,regA, regB])
 
     if region_paired_A is not None and region_paired_A != []:
-        paired_check = bpp[region_paired_A, region_paired_B]
-        if ((paired_check.mean() < epsilon_avg_paired*prob_factor['paired']) or
-                (paired_check.min() < epsilon_paired*prob_factor['paired'])):
-            results["paired_fail"].append([region_paired_A, region_paired_B])
+        for i,(regA, regB) in enumerate(zip(region_paired_A,region_paired_B)):
+            if regA != [] and regB != []:
+                paired_check = bpp[regA, regB]
+                if ((paired_check.mean() < epsilon_avg_paired*prob_factor['paired']) or
+                        (paired_check.min() < epsilon_paired*prob_factor['paired'])):
+                    results["paired_fail"].append([i,regA, regB])
 
     # if good save image if needed
     if results["unpaired_fail"] + results["interaction_fail"] + results["paired_fail"] == []:
@@ -2039,16 +2081,19 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
                                     sum(parts[:2])))
     regions['pairedB'] = list(range(sum(parts[:3]),
                                     sum(parts[:4])))[::-1]
-    regions['noninteractA'] = list(range(sum(parts[:1]),
-                                         sum(parts[:5])))
-    regions['noninteractB'] = list(range(sum(parts[:5]),
-                                         sum(parts[:6])))
+    # 5' pad and 3' pad do not interact with sequence
+    regions['noninteractA'] = [list(range(sum(parts[:1]),
+                                         sum(parts[:5]))),
+                               list(range(sum(parts[:6]),
+                                              sum(parts[:10])))]
+    regions['noninteractB'] = [list(range(sum(parts[:5]),
+                                         sum(parts[:10]))),
+                            list(range(sum(parts[:1]),
+                                         sum(parts[:6])))]
     regions['pairedA'].extend(list(range(sum(parts[:7]),
                                          sum(parts[:8]))))
     regions['pairedB'].extend(list(range(sum(parts[:9]),
                                          sum(parts[:10])))[::-1])
-    regions['noninteractA'].extend(list(range(sum(parts[:6]),
-                                              sum(parts[:10]))))
 
     return structs, regions
 
@@ -2091,7 +2136,7 @@ def _get_5_3_split_multi(lengths, hang, polyAhang, min_length_stem,
 
         for part, region in regions.items():
             if part == 'noninteractB':
-                current_regions[part] = region
+                current_regions[part] = [region,region]
             else:
                 current_regions[part].extend(region)
         current_length += length
@@ -2178,4 +2223,6 @@ def plot_punpaired_from_fasta(fasta, save_image):
 
     plot_punpaired(p_unpaireds, labels, seqs, muts, [], [], save_image)
 
-# add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='none',save_image_folder='test')
+#add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='none',save_image_folder='test',save_bpp_fig=1)
+
+#add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='same_length',save_image_folder='test',save_bpp_fig=1)

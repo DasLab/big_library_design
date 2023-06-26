@@ -100,6 +100,11 @@ The default behavior for pad location is length dependent, where preference is t
 
 While not scripted in any of our major functionality, you can specify to have the pad only located at the 5' or 3' end of the sequence of interest using the `pad_side` argument in [add_pad](https://github.com/DasLab/big_library_design/blob/76e070065f1019ea755810c33c90f930b807dba8/utils/mutational_utils.py#L596) and [add_library_elements](https://github.com/DasLab/big_library_design/blob/76e070065f1019ea755810c33c90f930b807dba8/utils/mutational_utils.py#L1195C5-L1195C25).
 
+#### 4. Sharing of pad sequence
+
+Padding can be found for each sequence independently. Or the same pad can be used for all sequences of the same length. Finally, the same padding can be used for every sequences, and truncated as needed, we do not recommend this option as most length combination, it is extremely difficult to find a structurally sound pad for all lengths.
+
+
 
 
 

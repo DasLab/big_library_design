@@ -91,7 +91,9 @@ m2seq.add_argument('--share_pad', type=str, default='same_length',
                    help='If there are sequences of multiple lengths, to obtain a library of equal length some sequences will be padded. This specifies which sequence share the same pad, all, none or same_length sequences.')
 m2seq.add_argument('--pad_loop', type=str, default='TTCG',
                    help='If pad has stem the constant loop to use.')
-m2seq.add_argument('--pad_hang', type=int, default=3,
+m2seq.add_argument('--pad_polyAhang', type=int, default=3,
+                   help='Number nucleotides (only +1 possible) to have a polyA, single-stranded hang between sequence of interest and pad.')
+m2seq.add_argument('--pad_hang', type=int, default=0,
                    help='Number nucleotides (only +1 possible) to have a random, single-stranded hang between sequence of interest and pad.')
 m2seq.add_argument('--pad_num_samples', type=int, default=30,
                    help="Minimum number of sequences to check pad's effect on structure.")
@@ -137,6 +139,7 @@ if args.check_library:
 ###############################################################################
 
 elif args.just_library:
+    '''
     # check pad needed
     same_length, length = get_same_length(args.input_fasta)
     if same_length and length==args.pad_to_length:
@@ -155,12 +158,12 @@ elif args.just_library:
                 hang=args.pad_hang,
                 min_num_samples=args.pad_num_samples,
                 pad_to_length=args.pad_to_length)
-
+    '''
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
             used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
-
+    '''
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
@@ -180,6 +183,35 @@ elif args.just_library:
                               num_barcode_before_reduce=args.num_barcodes_reduce_prob,
                               used_barcodes=used_barcodes,
                               min_edit=args.min_edit)
+    '''
+
+    add_library_elements(args.input_fasta, out_fasta=f'{args.output_prefix}_library.fasta', 
+                              share_pad=args.share_pad,
+                              seq5=args.seq5, seq3=args.seq3,
+                              barcode_num_bp=args.barcode_numbp, 
+                              barcode_num5hang=args.barcode_num5randomhang, 
+                              barcode_num5polyA=args.barcode_num5polyA,
+                              barcode_loop=args.barcode_loop,
+                              epsilon_interaction=args.Pmax_noninteract,
+                              epsilon_punpaired=args.Pmin_unpaired,
+                              epsilon_avg_punpaired=args.Pavg_unpaired,
+                              epsilon_paired=args.Pmin_paired,
+                              epsilon_avg_paired=args.Pavg_paired,
+                              save_image_folder=args.save_image_folder,
+                              save_bpp_fig=args.save_bpp_fig,
+                              punpaired_chunk_size=args.max_seq_punpaired_plot,
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob,
+                              used_barcodes=used_barcodes,
+                              min_edit=args.min_edit,
+                              pad_loop=args.pad_loop,
+                              pad_hang=args.pad_hang,
+                              # pad_polyAhang, num_barcode_before_reduce, percent_reduce_prob
+                              #, ,pad_max_prop_bad, pad_side
+                              #min_length_stem,  num_pads_reduce  max_length_stem
+                              pad_polyAhang = args.pad_polyAhang,
+                              pad_min_num_samples=args.pad_num_samples,
+                              pad_to_length=args.pad_to_length)
+
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -220,6 +252,7 @@ elif args.window:
                               num_barcode_before_reduce=args.num_barcodes_reduce_prob,
                               used_barcodes=used_barcodes,
                               min_edit=args.min_edit)
+
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -231,6 +264,7 @@ elif args.m2seq:
     get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta'], f'{args.output_prefix}_WT_single_mut.fasta')
 
+    '''
     # check pad needed
     same_length, length = get_same_length(args.input_fasta)
     if same_length and length==args.pad_to_length:
@@ -249,12 +283,12 @@ elif args.m2seq:
                 hang=args.pad_hang,
                 min_num_samples=args.pad_num_samples,
                 pad_to_length=args.pad_to_length)
-
+    '''
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
             used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
-
+    '''
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
@@ -274,6 +308,33 @@ elif args.m2seq:
                               num_barcode_before_reduce=args.num_barcodes_reduce_prob,
                               used_barcodes=used_barcodes,
                               min_edit=args.min_edit)
+    '''
+    add_library_elements(f'{args.output_prefix}_WT_single_mut.fasta', out_fasta=f'{args.output_prefix}_library.fasta', 
+                              share_pad=args.share_pad,
+                              seq5=args.seq5, seq3=args.seq3,
+                              barcode_num_bp=args.barcode_numbp, 
+                              barcode_num5hang=args.barcode_num5randomhang, 
+                              barcode_num5polyA=args.barcode_num5polyA,
+                              barcode_loop=args.barcode_loop,
+                              epsilon_interaction=args.Pmax_noninteract,
+                              epsilon_punpaired=args.Pmin_unpaired,
+                              epsilon_avg_punpaired=args.Pavg_unpaired,
+                              epsilon_paired=args.Pmin_paired,
+                              epsilon_avg_paired=args.Pavg_paired,
+                              save_image_folder=args.save_image_folder,
+                              save_bpp_fig=args.save_bpp_fig,
+                              punpaired_chunk_size=args.max_seq_punpaired_plot,
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob,
+                              used_barcodes=used_barcodes,
+                              min_edit=args.min_edit,
+                              pad_loop=args.pad_loop,
+                              pad_hang=args.pad_hang,
+                              # pad_polyAhang, num_barcode_before_reduce, percent_reduce_prob
+                              #, ,pad_max_prop_bad, pad_side
+                              #min_length_stem,  num_pads_reduce  max_length_stem
+                              pad_polyAhang = args.pad_polyAhang,
+                              pad_min_num_samples=args.pad_num_samples,
+                              pad_to_length=args.pad_to_length)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -289,7 +350,7 @@ elif args.m2seq_with_double:
     get_all_double_mutants(args.input_fasta, regionAs, regionBs,out_fasta=f'{args.output_prefix}_double_mut.fasta')
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta', f'{args.output_prefix}_double_mut.fasta'],
                    f'{args.output_prefix}_WT_single_double_mut.fasta')
-
+    '''
     # check pad needed
     same_length, length = get_same_length(args.input_fasta)
     if same_length and length==args.pad_to_length:
@@ -308,12 +369,12 @@ elif args.m2seq_with_double:
                 hang=args.pad_hang,
                 min_num_samples=args.pad_num_samples,
                 pad_to_length=args.pad_to_length)
-
+    '''
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
             used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
-
+    '''
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
                               seq5=args.seq5,
@@ -333,6 +394,33 @@ elif args.m2seq_with_double:
                               num_barcode_before_reduce=args.num_barcodes_reduce_prob,
                               used_barcodes=used_barcodes,
                               min_edit=args.min_edit)
+    '''
+    add_library_elements(f'{args.output_prefix}_WT_single_double_mut.fasta', out_fasta=f'{args.output_prefix}_library.fasta', 
+                              share_pad=args.share_pad,
+                              seq5=args.seq5, seq3=args.seq3,
+                              barcode_num_bp=args.barcode_numbp, 
+                              barcode_num5hang=args.barcode_num5randomhang, 
+                              barcode_num5polyA=args.barcode_num5polyA,
+                              barcode_loop=args.barcode_loop,
+                              epsilon_interaction=args.Pmax_noninteract,
+                              epsilon_punpaired=args.Pmin_unpaired,
+                              epsilon_avg_punpaired=args.Pavg_unpaired,
+                              epsilon_paired=args.Pmin_paired,
+                              epsilon_avg_paired=args.Pavg_paired,
+                              save_image_folder=args.save_image_folder,
+                              save_bpp_fig=args.save_bpp_fig,
+                              punpaired_chunk_size=args.max_seq_punpaired_plot,
+                              num_barcode_before_reduce=args.num_barcodes_reduce_prob,
+                              used_barcodes=used_barcodes,
+                              min_edit=args.min_edit,
+                              pad_loop=args.pad_loop,
+                              pad_hang=args.pad_hang,
+                              # pad_polyAhang, num_barcode_before_reduce, percent_reduce_prob
+                              #, ,pad_max_prop_bad, pad_side
+                              #min_length_stem,  num_pads_reduce  max_length_stem
+                              pad_polyAhang = args.pad_polyAhang,
+                              pad_min_num_samples=args.pad_num_samples,
+                              pad_to_length=args.pad_to_length)
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
