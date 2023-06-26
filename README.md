@@ -51,6 +51,7 @@ Below we will focus on each of these features and the design decisions that can 
 
 [Structural checks](#structural-checks)
 
+[Example functionalities](#example-functionalities)
 
 
 ### Sequences of interest
