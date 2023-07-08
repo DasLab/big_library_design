@@ -60,6 +60,20 @@ def combine_fastas(fastas, out_fasta):
 
     SeqIO.write(all_seqs, out_fasta, "fasta")
 
+def split_fasta_file(fasta,N,folder,name):
+    if not os.path.isdir(folder):
+        os.mkdir(folder)
+
+    seqs = list(SeqIO.parse(fasta, "fasta"))
+    len_seqs = len(seqs)//N
+
+
+    for n in range(N):
+        if not os.path.isdir(f'{folder}/{n}'):
+            os.mkdir(f'{folder}/{n}')
+
+        seqset = seqs[len_seqs*n:min(len_seqs*(n+1),len(seqs))]
+        SeqIO.write(seqset,f'{folder}/{n}/{name}',"fasta")
 
 def format_fasta_for_submission(fasta, out_file, file_format='twist'):
     '''
@@ -178,6 +192,8 @@ def get_used_barcodes(fasta, start, end):
     '''
 
     all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    test_barcode = _get_dna_from_SeqRecord(all_seqs[0])[start:end+1]
+    print(f"Confirm {test_barcode} is a correct barcode, otherwise change start and end.")
     barcodes = []
     for record in all_seqs:
         seq = _get_dna_from_SeqRecord(record)
@@ -542,7 +558,9 @@ def add_known_pads(fasta, pad5_dict, pad3_dict, out_fasta=None):
 
 def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
                      polyA5=0, polyA3=0,
-                     loop=TETRALOOP, bases=BASES):
+                     loop=TETRALOOP, bases=BASES,
+                     used_barcodes=[],
+                     shuffle_barcodes=True):
     '''
     Return all barcodes of specified structure
 
@@ -581,10 +599,13 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
 
         # put all barcode parts together
         seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)
-        name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
-        seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
-        all_barcodes.append(seq_rec)
+        if seq not in used_barcodes:
+            name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
+            seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
+            all_barcodes.append(seq_rec)
 
+    if shuffle_barcodes:
+        shuffle(all_barcodes)
     # save
     if out_fasta is not None:
         SeqIO.write(all_barcodes, out_fasta, "fasta")
@@ -971,13 +992,11 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 
     # get and randomly shuffle all potential barcodes
     all_uids = get_all_barcodes(num_bp=num_bp, loop=loop, num5hang=num5hang,
-                                polyA5=num5polyA)
+                                polyA5=num5polyA,shuffle_barcodes=True)
     if len(used_barcodes) != 0:
          if len(all_uids[0]) != len(used_barcodes[0]):
              print('ERROR: used barcodes are not the correct length')
     
-    shuffle(all_uids)
-
     # read sequences, check all same length
     seqs = list(SeqIO.parse(fasta, "fasta"))
     same_length, seq_len = _get_same_length(seqs)
@@ -1209,7 +1228,8 @@ def add_library_elements(fasta, out_fasta=None,
                               pad_loop=TETRALOOP, pad_hang=0, pad_polyAhang=3, pad_min_num_samples=30,
             pad_max_prop_bad=0.05, pad_side='both',
             min_length_stem=4, max_length_stem=12,
-            num_pads_reduce=100, pad_to_length=None):
+            num_pads_reduce=100, pad_to_length=None,
+            barcode_file=None):
     '''
     From a fasta of sequences, add constant regions and barcodes
     Given a fasta of sequence pad all sequence to the same length
@@ -1277,7 +1297,7 @@ ence of different length are just truncated (all)
     # barcdoe and the 3UT and 5UTR and do a full check
 
     # if image folder does not exist create it
-    if save_image_folder is not None:
+    if save_image_folder is not None and save_image_folder!="None":
         if not os.path.exists(save_image_folder):
             print(f'{save_image_folder} did not exists, creating.')
             os.makedirs(save_image_folder)
@@ -1310,24 +1330,30 @@ ence of different length are just truncated (all)
         desired_len = pad_to_length
     porp_reduce = (1-(percent_reduce_prob/100))
 
+    if barcode_file is not None and share_pad != 'none':
+        print("ERROR: if using sbatch, must have share_pad=none when specifying barcode_file.")
     # if want all pads to be random
     if share_pad == 'none':
-        print("Getting random pads for each sequence, not guaranteed to be unique.")
         if min_edit!=2 and barcode_num5hang!=0:
-            print("WARNING: the new pad+barcode code for no sharing of barcodes is only currently implemented for stem-only barcodes and edit distance of 2")
+                print("WARNING: the new pad+barcode code for no sharing of barcodes is only currently implemented for stem-only barcodes and edit distance of 2")
 
         lib = []
-
-        # get and randomly shuffle all potential barcodes
-        all_uids = get_all_barcodes(num_bp=barcode_num_bp, loop=barcode_loop, num5hang=barcode_num5hang,
-                                    polyA5=barcode_num5polyA)
-        if len(used_barcodes) != 0:
-             if len(all_uids[0]) != len(used_barcodes[0]):
-                 print('ERROR: used barcodes are not the correct length')
-        
-        shuffle(all_uids)
-
         current_uid = 0
+        rejected_uids = []
+        if barcode_file is None:
+            print("Getting random pads for each sequence, not guaranteed to be unique.")
+
+            # get and randomly shuffle all potential barcodes
+            all_uids = get_all_barcodes(num_bp=barcode_num_bp, loop=barcode_loop, num5hang=barcode_num5hang,
+                                        polyA5=barcode_num5polyA,shuffle_barcodes=True)
+            if len(used_barcodes) != 0:
+                 if len(all_uids[0]) != len(used_barcodes[0]):
+                     print('ERROR: used barcodes are not the correct length')
+            
+        else:
+            all_uids = list(SeqIO.parse(barcode_file, "fasta"))
+
+        
 
 
         for seq_length, seqs in seq_by_length.items():
@@ -1377,7 +1403,7 @@ ence of different length are just truncated (all)
                         prob_factor[type_error] = porp_reduce**mutiplier
                         if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
                             seq_count[type_error] += 1
-                            print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
+                            print(f'For {seq.name}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
                     # get random pad
 
                     pad5 = _get_random_barcode(num_bp=structs["5"]['bp'],
@@ -1435,18 +1461,31 @@ ence of different length are just truncated (all)
                         # if barcode is good,
                         if not barcode_fail:
                             uid_good = True
+                        else:
+                            rejected_uids.append(all_uids[current_uid])
+
                         
                         good_pad = struct_results["pass"]
+                        if not good_pad:
+                            seq_count = _update_seq_count(seq_count,struct_results)
                         current_uid += 1
                         barcode_count += 1
+                        # if looped through all barcodes, go back to previously rejected barcodes and continue loop
+                        if current_uid == len(all_uids):
+                            all_uids = rejected_uids
+                            current_uid, rejected_uids = 0, []
 
                     # TODO punpaired
 
                     # if its non interact 2 then its barcode needs revamped, otherwise pad                    
                     
                     # get full sequence and check structure
-                    if not good_pad:
-                        seq_count = _update_seq_count(seq_count,struct_results)
+                    
+
+
+                    
+
+
                 # if pass add final sequence
                 padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
                                              full_seq_name, '', '')
