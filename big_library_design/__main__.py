@@ -257,16 +257,35 @@ elif args.just_library_sbatch:
     if not os.path.isdir(f'{args.output_prefix}_sbatch_results'):
         os.mkdir(f'{args.output_prefix}_sbatch_results')
 
-    ### num para
-    print("Splitting barcodes and sequences.")
-    split_fasta_file(args.input_fasta,args.sbatch_processes,f'{args.output_prefix}_sbatch_results','seqs.fasta')
-    split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',args.sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
-
-    if args.share_pad != "none":
-        print("ERROR: for sbatch share_pad must be none")
-
-    for i in range(1,args.sbatch_processes):
+    if args.share_pad == 'none':
+        ### num para
+        print("Splitting barcodes and sequences.")
+        split_fasta_file(args.input_fasta,args.sbatch_processes,f'{args.output_prefix}_sbatch_results','seqs.fasta')
+        split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',args.sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
+        sbatch_processes = args.sbatch_processes
         
+    elif args.share_pad == 'same_origin':
+        # get groups
+        seqs = parse_input_sequences(args.input_fasta)
+        seqs_by_origin = {}
+        for seq in seqs:
+            origin = _get_origin_seq_from_name(seq.name)
+            if origin in seqs_by_origin:
+                seqs_by_origin[origin].append(seq)
+            else:
+                seqs_by_origin[origin] = [seq]
+        sbatch_processes = len(seqs_by_origin.keys())
+        print(f"splitting into {sbatch_processes}, one for each origin")
+        split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
+
+        for i,(origin,seqs) in enumerate(seqs_by_origin.items()):
+            SeqIO.write(seqs,f'{args.output_prefix}_sbatch_results/{i}/seq.fasta',"fasta")
+
+    else:
+        print('ERROR sbatch parralelization only implented for no sharing of pad of share fromm origin source.')
+
+    for i in range(1,sbatch_processes):
+            
         command = f'python -m big_library_design --just_library -i seqs.fasta -o out --barcode_file barcodes.fasta '
         command += f'--share_pad {args.share_pad} --seq5 {args.seq5} --seq3 {args.seq3} --barcode_numbp {args.barcode_numbp} '
         command += f'--barcode_num5randomhang {args.barcode_num5randomhang} --barcode_num5polyA {args.barcode_num5polyA} '
@@ -303,13 +322,13 @@ elif args.just_library_sbatch:
 
     # wait until all done
     num_done = len(glob(f'{args.output_prefix}_sbatch_results/*/out_library.txt'))
-    while num_done < args.sbatch_processes:
-        print(f"waiting for {args.sbatch_processes-num_done} processes to be done, checking again in 30sec")
+    while num_done < sbatch_processes:
+        print(f"waiting for {sbatch_processes-num_done} processes to be done, checking again in 30sec")
         time.sleep(30)
         num_done = len(glob(f'{args.output_prefix}_sbatch_results/*/out_library.txt'))
     # combine
     combine_fastas(glob(f'{args.output_prefix}_sbatch_results/*/out_library.txt'),f'{args.output_prefix}_library.fasta')
-
+    
 
 ###############################################################################
 # Window

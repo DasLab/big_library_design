@@ -11,6 +11,7 @@ from arnie.bpps import bpps
 from arnie.utils import convert_dotbracket_to_bp_list
 from Levenshtein import distance as edit_distance
 from pybktree import BKTree
+from glob import glob
 
 
 '''
@@ -1525,7 +1526,7 @@ ence of different length are just truncated (all)
         SeqIO.write(lib, out_fasta, "fasta")
         print(f'Saved all padded sequences to {out_fasta}.')
 
-    elif share_pad == 'share_origin':
+    elif share_pad == 'same_origin':
         pad_fasta = f"{out_fasta.rsplit('.',1)[0]}_pad.{out_fasta.rsplit('.',1)[1]}"
         lib = []
         pads_by_len = {}
@@ -1594,6 +1595,11 @@ ence of different length are just truncated (all)
                 good_pad = False
                 prob_factor = {}
                 seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
+                if not os.path.exists(f'{save_image_folder}/temp'):
+                    os.makedirs(f'{save_image_folder}temp')
+                else:
+                    for f in glob(f'{save_image_folder}temp/*'):
+                        os.remove(f)
                 # current_pad = 0
                 while not good_pad:
                     potential_lib = []
@@ -1612,13 +1618,14 @@ ence of different length are just truncated (all)
 
                     # chek all samples sequences
                     bad_count = 0
-                    for i, seq in enumerate(seqs):
+                    for i, seq in enumerate(seqs[:20]): #TODO
                         #if i % 50 == 0 and i != 0:
                         #    print(i)
                         
                         barcode_count = 0
                         uid_good = False
                         while barcode_count < 20 and not uid_good:
+                            # more barcode search... TODO
                             for type_error, count in seq_count.items():
                                 mutiplier = (count // num_pads_reduce)
                                 prob_factor[type_error] = porp_reduce**mutiplier
@@ -1631,7 +1638,15 @@ ence of different length are just truncated (all)
                                                       num5hang=barcode_num5hang,
                                                       polyA5=barcode_num5polyA)
                             full_seq = seq5 + pad5 + _get_dna_from_SeqRecord(seq) + pad3 + barcode + seq3
+                            full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}_libraryready'
 
+                            # check if structure correct, save picture if specified and chance has it
+                            if (save_image_folder is not None) and (random() < save_bpp_fig):
+                                save_image = f'{save_image_folder}/temp/{full_seq_name}.png'
+                                plot_lines = None # TODO lines
+
+                            else:
+                                save_image, plot_lines = None, None
                             # check if structure correct, save picture if specified and chance has it
                             struct_results = check_struct_bpp(full_seq, regions['unpaired'], 
                                                               regions['pairedA'], regions['pairedB'], 
@@ -1640,7 +1655,8 @@ ence of different length are just truncated (all)
                                                               epsilon_punpaired=epsilon_punpaired,
                                                               epsilon_avg_punpaired=epsilon_avg_punpaired,
                                                               epsilon_paired=epsilon_paired,
-                                                              epsilon_avg_paired=epsilon_avg_paired)
+                                                              epsilon_avg_paired=epsilon_avg_paired,
+                                                              save_image=save_image,prob_factor=prob_factor)
 
                             # if barcode fails, get new barcode and start again
                             barcode_fail = False
@@ -1665,7 +1681,7 @@ ence of different length are just truncated (all)
 
                             # if not good structure add to count
                             # stop if reached maximal bad
-                            if not good_pad:
+                            if not good_pad and uid_good:
                                 seq_count = _update_seq_count(seq_count,struct_results)
                         if not good_pad:
                             bad_count += 1
@@ -1673,12 +1689,15 @@ ence of different length are just truncated (all)
                                 break
                         else:
                             # good so add to list
-                            full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}_libraryready'
+                            full_seq = _get_dna_from_SeqRecord(full_seq)
                             padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
                                                  full_seq_name, '', '')
                             potential_lib.append(padded_seq)
 
-                lib.append(padded_seq)
+                # TODO this may have to be parralized? across groups --> same_pad seperatesequences
+                lib.extend(potential_lib)
+                for f in glob(f'{save_image_folder}/temp/*'):
+                    os.system(f"mv {f} {'/'.join(f.split('/')[:-2]+f.split('/')[-1:])}")
         # save
         SeqIO.write(lib, out_fasta, "fasta")
         print(f'Saved all padded sequences to {out_fasta}.')
@@ -2525,5 +2544,3 @@ def plot_punpaired_from_fasta(fasta, save_image):
 #add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='none',save_image_folder='test',save_bpp_fig=1)
 
 #add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='same_length',save_image_folder='test',save_bpp_fig=1)
-xxx=parse_input_sequences('/home/rachael/Downloads/230710_TEMP_openknot2_puzzle_11836497.tsv')
-print(parse_input_sequences(xxx)[0])
