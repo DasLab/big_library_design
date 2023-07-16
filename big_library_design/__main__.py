@@ -143,14 +143,30 @@ if args.check_library:
         for p in problems:
             print('ERROR', p)
     all_good = True
-    for i,x in enumerate(barcodes):
-        for j,y in enumerate(barcodes[i+1:]):
-            if edit_distance(x,y) < args.min_edit:
-                all_good = False
-                print(f'ERROR {names[i]} has close barcode {x}, with {names[i+j+1]}, {y}, distance is {edit_distance(x,y)} which is less than minimum specified {args.min_edit}.')
+    if args.min_edit == 2 and args.barcode_num5randomhang == 0:
+        bp_barcodes = [x[:args.barcode_numbp] for x in barcodes]
+        all_good = len(bp_barcodes)==len(set(bp_barcodes))
+        if not all_good:
+            print("ERROR, not all stem unqiue, printing duplicates")
+            found_barcodes, found_barcodes_full = [],[]
+            for i,(short_barcode,barcode) in enumerate(zip(bp_barcodes,barcodes)):
+                if short_barcode in found_barcodes:
+                    print(short_barcode,barcode,i)
+                    ind = found_barcodes.index(short_barcode)
+                    print(found_barcodes[ind],found_barcodes_full[ind],ind)
+                found_barcodes.append(short_barcode)
+                found_barcodes_full.append(barcode)
+    else:
+        for i,x in tqdm(enumerate(barcodes)):
+            for j,y in enumerate(barcodes[i+1:]):
+                if edit_distance(x,y) < args.min_edit:
+                    all_good = False
+                    print(f'ERROR {names[i]} has close barcode {x}, with {names[i+j+1]}, {y}, distance is {edit_distance(x,y)} which is less than minimum specified {args.min_edit}.')
     if all_good:
         print(f'All barcodes are unqiue to the specfied edit distance of {args.min_edit}.')
-
+    else:
+        print(barcodes[0])
+        print('err',len(barcodes),len(set(barcodes)))
 
 ###############################################################################
 # just library

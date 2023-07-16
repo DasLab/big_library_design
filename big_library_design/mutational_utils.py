@@ -172,7 +172,7 @@ def get_same_length(fasta):
     Checks if all sequences in a given fasta are the same length
     '''
 
-    seqs = list(SeqIO.parse(fasta, "fasta"))
+    seqs = parse_input_sequences(fasta)
     return _get_same_length(seqs)
 
 
@@ -217,7 +217,7 @@ def get_used_barcodes(fasta, start, end):
     from a fasta file return all sequences between start and end inclusive
     '''
 
-    all_seqs = list(SeqIO.parse(fasta, "fasta"))
+    all_seqs = parse_input_sequences(fasta)
     test_barcode = _get_dna_from_SeqRecord(all_seqs[0])[start:end+1]
     print(f"Confirm {test_barcode} is a correct barcode, otherwise change start and end.")
     barcodes = []
