@@ -339,13 +339,14 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     return windows
 
 
-def get_all_single_mutants(fasta, out_fasta=None, bases=BASES):
+def get_all_single_mutants(fasta, out_fasta=None, mutational_dict=None, bases=BASES):
     '''
     Get all single mutants from sequences in a fasta file.
 
     Args:
         fasta (str): fasta file containing sequence to get mutants of
         out_fasta (str): if specified, save mutants to fasta (default None)
+        mutational_dict (dict): if specified, nucleotide:list nucleotide to mutate to (default None)
         bases (list): what bases can be selected as mutants (default ['A', 'C', 'G', 'T'])
 
     Returns:
@@ -363,18 +364,23 @@ def get_all_single_mutants(fasta, out_fasta=None, bases=BASES):
     all_WT = SeqIO.parse(fasta, "fasta")
     all_single_mutants = []
 
+    # TODO cannot handle non ACTG?
+    
     for record in all_WT:
         seq = _get_dna_from_SeqRecord(record)
 
         # at each position, get single mutants
         for i in range(len(seq)):
-            for mut in bases:
+            if mutational_dict is None:
+                base_list = bases
+            else:
+                base_list = mutational_dict[seq[i]]
+            for mut in base_list:
                 if mut != seq[i]:
                     name = f' {record.id}_{i}{seq[i]}-{mut}'
                     new_seq = seq[:i]+mut+seq[i+1:]
                     new_mut = SeqIO.SeqRecord(Seq.Seq(new_seq), name, '', '')
                     all_single_mutants.append(new_mut)
-
     # save file
     if out_fasta is not None:
         SeqIO.write(all_single_mutants, out_fasta, "fasta")

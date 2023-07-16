@@ -112,6 +112,8 @@ m2seq.add_argument('--pad_num_samples', type=int, default=30,
                    help="Minimum number of sequences to check pad's effect on structure.")
 m2seq.add_argument('--pad_to_length', type=int, default=None,
                      help='Length of sequence to pad to, if nothing, longest length in fasta file.')
+m2seq.add_argument('--wcf_swap_only', action='store_true',
+                     help='Only mutate A<->U and C<->G resulting in N mutants (as opposed to the full 3N).')
 
 double = parser.add_argument_group('double mutant')
 double.add_argument('--doublemut', nargs='+',
@@ -352,7 +354,10 @@ elif args.window:
 ###############################################################################
 
 elif args.m2seq:
-    get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
+    if args.wcf_swap_only:
+        get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta',mutational_dict={'A':'T','T':'A','C':'G','G':'C'})
+    else:
+        get_all_single_mutants(args.input_fasta, f'{args.output_prefix}_single_mut.fasta')
     combine_fastas([args.input_fasta, f'{args.output_prefix}_single_mut.fasta'], f'{args.output_prefix}_WT_single_mut.fasta')
 
     if not args.do_not_prepare:

@@ -24,3 +24,6 @@ commands_for_GPN.txt
 build
 *egg*
 __pycache__
+double_control/
+test/
+july15test/
