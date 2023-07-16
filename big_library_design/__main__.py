@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(
 
 required = parser.add_argument_group('Required')
 required.add_argument('-i', '--input_fasta', type=str, required=True,
-                    help='Sequences to make library out of, file in fasta format.')
+                    help='Sequences to make library out of, file in fasta format, or tsv.')
 required.add_argument('-o', '--output_prefix', type=str,
                     required=True, help='Prefix of the output files.')
 

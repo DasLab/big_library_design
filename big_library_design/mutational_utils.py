@@ -113,6 +113,31 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
         print('file_format not supported, available: custom_array twist agilent')
 
 
+def parse_input_sequences(seqs):
+    if type(seqs)==str:
+        if os.path.isfile(seqs):
+            extension = seqs.rsplit('.',1)[1]
+            if extension == 'fasta':
+                return list(SeqIO.parse(seqs, "fasta"))
+            elif extension == 'tsv':
+                df = pd.read_table(seqs)
+                cols = df.columns
+                name_seq_columns = [['id','sequence']]
+                for name_col, seq_col in name_seq_columns:
+                    if name_col in cols and seq_col in cols:
+                        return df.apply(lambda row: SeqIO.SeqRecord(Seq.Seq(_get_dna_from_SeqRecord(row[seq_col])),
+                                                  str(row[name_col]), '', ''), axis=1).to_list()
+                print("ERROR recognized tsv but did not recognize column nammes, please submmit and issue to request new input format.")
+            else:
+                print("ERROR unrecognized input file extension, please submit an issue to have the input format recognized.")
+        else:
+            print("ERROR recognized input as string, but file does not extist.")
+    elif type(seqs)==list and isinstance(seqs[0],SeqIO.SeqRecord):
+        return seqs
+    else:
+        print("ERROR unrecognized input, please submit an issue to have the input format recognized.")
+
+
 def randomly_select_seqs(fasta, reject_file, prop):
     '''
     Given a fasta randomly select N sequences and save to new fasta
@@ -1004,7 +1029,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
              print('ERROR: used barcodes are not the correct length')
     
     # read sequences, check all same length
-    seqs = list(SeqIO.parse(fasta, "fasta"))
+    seqs = parse_input_sequences(fasta)
     same_length, seq_len = _get_same_length(seqs)
     if not same_length:
         print("ERROR: sequences not all same length.")
@@ -1310,7 +1335,7 @@ ence of different length are just truncated (all)
             os.makedirs(save_image_folder)
 
     # get sequences and sort by length
-    seqs = list(SeqIO.parse(fasta, "fasta"))
+    seqs = parse_input_sequences(fasta)
     seq_by_length = {}
     for seq_rec in seqs:
         len_seq = len(seq_rec.seq)
@@ -1499,6 +1524,201 @@ ence of different length are just truncated (all)
         # save
         SeqIO.write(lib, out_fasta, "fasta")
         print(f'Saved all padded sequences to {out_fasta}.')
+
+    elif share_pad == 'share_origin':
+        pad_fasta = f"{out_fasta.rsplit('.',1)[0]}_pad.{out_fasta.rsplit('.',1)[1]}"
+        lib = []
+        pads_by_len = {}
+        all_seqs_by_origin = {}
+        for len_group,seqs in seq_by_length.items():
+            # get length of pad for this group, if 0 done
+            length_to_add = desired_len-len_group
+            pads_by_len[len_group] = {}
+
+            # get groups by origin
+            seqs_by_origin = {}
+            for seq in seqs:
+                origin = _get_origin_seq_from_name(seq.name)
+                if origin in seqs_by_origin:
+                    seqs_by_origin[origin].append(seq)
+                else:
+                    seqs_by_origin[origin] = [seq]
+            all_seqs_by_origin[len_group] = seqs_by_origin
+            if length_to_add == 0:
+                for origin in seqs_by_origin.keys():
+                    pads_by_len[len_group][origin] = ['', '']
+                continue
+
+            
+
+            # split length of pad to either end of the sequence and get regions
+            structs, regions = _get_5_3_split(length_to_add, pad_hang, pad_polyAhang,
+                                              min_length_stem, max_length_stem,
+                                              pad_side, pad_loop, len_group,offset=len(seq5))
+
+            # barcode structural regions
+            regions_barcode = [len(seq5), len(seq5)+desired_len,
+                       len(seq5)+desired_len+barcode_num5hang+barcode_num5polyA+(2*barcode_num_bp)+len(barcode_loop)]
+            # barcode should not interact with sequence nor 5' or 3'
+            regionA = list(range(regions_barcode[0], regions_barcode[1]))
+            regionA2 = list(range(0,regions_barcode[0]))+ list(range(regions_barcode[2],regions_barcode[2]+len(seq3)))
+            regionB = list(range(regions_barcode[1], regions_barcode[2]))
+            # pad should also not interact with 5' and 3' regions, nor barcode
+            for x in regions['noninteractB']:
+                x.extend(regionB)
+                x.extend(regionA2)
+            regionA.extend(regionA2)
+            regions['noninteractB'] = [regionA] + regions['noninteractB'] 
+            regions['noninteractA'] = [regionB] + regions['noninteractA'] 
+            region_unpaired = [list(range(regions_barcode[1],
+                                          regions_barcode[1]+barcode_num5hang+barcode_num5polyA)),
+                               list(range(regions_barcode[2]-barcode_num_bp-len(barcode_loop),
+                                          regions_barcode[2]-barcode_num_bp))]
+            region_paired_A = list(range(regions_barcode[1]+barcode_num5hang+barcode_num5polyA,
+                                         regions_barcode[2]-barcode_num_bp-len(barcode_loop)))
+            region_paired_B = list(range(regions_barcode[2]-barcode_num_bp, regions_barcode[2]))[::-1]
+            regions['pairedA'] = [region_paired_A, regions['pairedA'], ]
+            regions['pairedB'] = [region_paired_B, regions['pairedB']]
+            regions['unpaired'] = region_unpaired + regions['unpaired']
+
+            print(f"Finding a {structs['5']['N']}nt 5' pad with {structs['5']['bp']}bp stem {structs['5']['hang_rand']}nt random hang {structs['5']['hang_polyA']}nt polyA hang.")
+            print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
+            
+            for origin,seqs in seqs_by_origin.items():
+
+                print(f"Searching for pad for group len {len_group}, origin {origin}.")
+                #for seq in tqdm(seqs):
+                #    # TODO TODO
+
+                # loop through to find pad that works
+                good_pad = False
+                prob_factor = {}
+                seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
+                # current_pad = 0
+                while not good_pad:
+                    potential_lib = []
+                    # if tried enough relax the probability contstraints
+                    # TODO
+                    
+                    # get random pad
+                    pad5 = _get_random_barcode(num_bp=structs["5"]['bp'],
+                                               num3hang=structs["5"]['hang_rand'],
+                                               polyA3=structs["5"]['hang_polyA'],
+                                               loop=structs["5"]['loop'])
+                    pad3 = _get_random_barcode(num_bp=structs["3"]['bp'],
+                                               num5hang=structs["3"]['hang_rand'],
+                                               polyA5=structs["3"]['hang_polyA'],
+                                               loop=structs["3"]['loop'])
+
+                    # chek all samples sequences
+                    bad_count = 0
+                    for i, seq in enumerate(seqs):
+                        #if i % 50 == 0 and i != 0:
+                        #    print(i)
+                        
+                        barcode_count = 0
+                        uid_good = False
+                        while barcode_count < 20 and not uid_good:
+                            for type_error, count in seq_count.items():
+                                mutiplier = (count // num_pads_reduce)
+                                prob_factor[type_error] = porp_reduce**mutiplier
+                                if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
+                                    seq_count[type_error] += 1
+                                    print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
+                            # check barcode folds and barcode does not interact with sequence
+                            barcode = _get_random_barcode(num_bp=barcode_num_bp,
+                                                      loop=barcode_loop, 
+                                                      num5hang=barcode_num5hang,
+                                                      polyA5=barcode_num5polyA)
+                            full_seq = seq5 + pad5 + _get_dna_from_SeqRecord(seq) + pad3 + barcode + seq3
+
+                            # check if structure correct, save picture if specified and chance has it
+                            struct_results = check_struct_bpp(full_seq, regions['unpaired'], 
+                                                              regions['pairedA'], regions['pairedB'], 
+                                                              regions['noninteractA'], regions['noninteractB'],
+                                                              epsilon_interaction=epsilon_interaction,
+                                                              epsilon_punpaired=epsilon_punpaired,
+                                                              epsilon_avg_punpaired=epsilon_avg_punpaired,
+                                                              epsilon_paired=epsilon_paired,
+                                                              epsilon_avg_paired=epsilon_avg_paired)
+
+                            # if barcode fails, get new barcode and start again
+                            barcode_fail = False
+                            if len(struct_results['paired_fail'])>0:
+                                if struct_results['paired_fail'][0][0] == 0:
+                                    barcode_fail = True
+                            if len(struct_results['unpaired_fail'])>0:
+                                if struct_results['unpaired_fail'][0][0] < len(region_unpaired):
+                                    barcode_fail = True
+                            if len(struct_results['interaction_fail'])>0:
+                                if struct_results['interaction_fail'][0][0] == 0:
+                                    barcode_fail = True
+                                
+                            # if barcode is good,
+                            if not barcode_fail:
+                                uid_good = True
+                            
+                            good_pad = struct_results["pass"]
+                            barcode_count += 1
+                        
+                            # check pad folds and pad does not interact with sequence or others
+
+                            # if not good structure add to count
+                            # stop if reached maximal bad
+                            if not good_pad:
+                                seq_count = _update_seq_count(seq_count,struct_results)
+                        if not good_pad:
+                            bad_count += 1
+                            if bad_count >= max_bad_structs[len_group]:
+                                break
+                        else:
+                            # good so add to list
+                            full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}_libraryready'
+                            padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
+                                                 full_seq_name, '', '')
+                            potential_lib.append(padded_seq)
+
+                lib.append(padded_seq)
+        # save
+        SeqIO.write(lib, out_fasta, "fasta")
+        print(f'Saved all padded sequences to {out_fasta}.')
+        #        pads_by_len[len_group][origin] = [_get_dna_from_SeqRecord(
+        #            pad5), _get_dna_from_SeqRecord(pad3)]
+
+        #print('Found pads, now adding pads.')
+        #padded_seqs = []
+
+        #pads_by_len = {}
+        #all_seqs_by_origin = {}
+        #for seq_length, orign_groups in all_seqs_by_origin.items():
+        #    for origin, seqs in all_seqs_by_origin[seq_length].items():
+        #        pad5, pad3 = pads_by_len[seq_length][origin]
+        #        for seq in list(seqs):
+        #            full_seq = pad5+_get_dna_from_SeqRecord(seq)+pad3
+        #            full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}'
+        #            padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
+        #                                         full_seq_name, '', '')
+        #            padded_seqs.append(padded_seq)
+
+        # TODO low key just get barcodes as I go? --> faster
+        # accept a list of seqs instead of fasta.
+        #SeqIO.write(padded_seqs, pad_fasta, "fasta")
+        #print(f'Saved all padded sequences to {pad_fasta}.')
+
+
+        # STAGE 2 with pads now add barcodes
+        #lib = add_fixed_seq_and_barcode(fasta=pad_fasta, out_fasta=out_fasta, seq5=seq5, seq3=seq3,
+        #                          num_bp=barcode_num_bp, num5hang=barcode_num5hang, num5polyA=barcode_num5polyA,
+        #                          loop=barcode_loop,
+        #                          epsilon_interaction=epsilon_interaction,
+        #                          epsilon_punpaired=epsilon_punpaired,
+        #                          epsilon_avg_punpaired=epsilon_avg_punpaired,
+        #                          epsilon_paired=epsilon_paired,
+        #                          epsilon_avg_paired=epsilon_avg_paired,
+        #                          save_image_folder=save_image_folder, save_bpp_fig=save_bpp_fig,
+        #                          punpaired_chunk_size=punpaired_chunk_size, used_barcodes=used_barcodes,
+        #                          num_barcode_before_reduce=num_barcode_before_reduce,
+        #                          percent_reduce_prob=percent_reduce_prob, min_edit=min_edit)
 
     # if want sequences of same length to share same pad
     elif share_pad == 'same_length':
@@ -2030,6 +2250,40 @@ def _get_mutations_from_name(name):
     return nucs
 
 
+def _get_origin_seq_from_name(name):
+    '''
+    using the naming convention where the original sequence name
+    is followed by names added by this code (eg _#N-N_ for mutant,
+    _#pad#_ for pad)
+
+    WARNING consider each window (_#-#_) a different origin
+    '''
+
+    origin_name = []
+    name_parts = name.split('_')
+    reach_library_part = False
+    while not reach_library_part and len(name_parts)>0:
+        next_part = name_parts.pop(0)
+        if '-' in next_part:
+            subparts = next_part.split('-')
+            if len(subparts)==2:
+                if subparts[0][-1] in BASES and subparts[1] in BASES and subparts[0][:-1].isnumeric():
+                    reach_library_part = True 
+                # uncomment if ever want to consider different windows the same origin
+                #if subparts[0].isnumeric() and subparts[1].isnumeric():
+                #    reach_library_part = True
+        if 'pad' in next_part:
+            subparts = next_part.split('pad')
+            if len(subparts)==2:
+                if subparts[0].isnumeric() and subparts[1].isnumeric():
+                    reach_library_part = True
+        if next_part == 'libraryready':
+            reach_library_part = True
+        if not reach_library_part:
+            origin_name.append(next_part)
+    return '_'.join(origin_name)
+
+
 def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pad_side, loop, seq_len,offset=0):
 
     # initialize variables
@@ -2271,3 +2525,5 @@ def plot_punpaired_from_fasta(fasta, save_image):
 #add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='none',save_image_folder='test',save_bpp_fig=1)
 
 #add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='same_length',save_image_folder='test',save_bpp_fig=1)
+xxx=parse_input_sequences('/home/rachael/Downloads/230710_TEMP_openknot2_puzzle_11836497.tsv')
+print(parse_input_sequences(xxx)[0])
