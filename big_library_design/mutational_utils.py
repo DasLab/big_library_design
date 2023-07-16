@@ -1618,7 +1618,7 @@ ence of different length are just truncated (all)
 
                     # chek all samples sequences
                     bad_count = 0
-                    for i, seq in enumerate(seqs[:20]): #TODO
+                    for i, seq in enumerate(seqs): 
                         #if i % 50 == 0 and i != 0:
                         #    print(i)
                         
