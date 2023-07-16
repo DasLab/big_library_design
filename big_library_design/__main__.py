@@ -83,6 +83,9 @@ library.add_argument('--example_sbatch', type=str, default=None,
                      help='File with sbatch header.')
 library.add_argument('--barcode_file', type=str, default=None,
                      help='File with all possible barcodes specified.')
+library.add_argument('--num_replicates', type=int, default=1,
+                     help='For each sequence of interest how many replicates to have with same sequence of interest but diffferent pad or barcode.')
+
 
 window = parser.add_argument_group('window')
 window.add_argument('--length', type=int, default=100,
@@ -226,7 +229,8 @@ elif args.just_library:
                               pad_polyAhang = args.pad_polyAhang,
                               pad_min_num_samples=args.pad_num_samples,
                               pad_to_length=args.pad_to_length,
-                              barcode_file=args.barcode_file)
+                              barcode_file=args.barcode_file,
+                              num_replicates=args.num_replicates)
 
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
@@ -270,7 +274,7 @@ elif args.just_library_sbatch:
         command += f'--Pavg_unpaired {args.Pavg_unpaired} --Pmin_paired {args.Pmin_paired} --Pavg_paired {args.Pavg_paired} '
         command += f'--save_image_folder {args.save_image_folder} --save_bpp_fig {args.save_bpp_fig} --max_seq_punpaired_plot {args.max_seq_punpaired_plot} '
         command += f'--num_barcodes_reduce_prob {args.num_barcodes_reduce_prob} --min_edit {args.min_edit} --pad_loop {args.pad_loop} --pad_hang {args.pad_hang} '
-        command += f'--pad_polyAhang {args.pad_polyAhang} --pad_num_samples {args.pad_num_samples} '
+        command += f'--pad_polyAhang {args.pad_polyAhang} --pad_num_samples {args.pad_num_samples} --num_replicates {args.num_replicates} '
         if args.pad_to_length is not None:
             command += f'--pad_to_length {args.pad_to_length} '
 
@@ -289,8 +293,8 @@ elif args.just_library_sbatch:
     command += f'--Pavg_unpaired {args.Pavg_unpaired} --Pmin_paired {args.Pmin_paired} --Pavg_paired {args.Pavg_paired} '
     command += f'--save_image_folder {args.save_image_folder} --save_bpp_fig {args.save_bpp_fig} --max_seq_punpaired_plot {args.max_seq_punpaired_plot} '
     command += f'--num_barcodes_reduce_prob {args.num_barcodes_reduce_prob} --min_edit {args.min_edit} --pad_loop {args.pad_loop} --pad_hang {args.pad_hang} '
-    command += f'--pad_polyAhang {args.pad_polyAhang} --pad_num_samples {args.pad_num_samples} '
-    if args.pad_to_length is not None:
+    command += f'--pad_polyAhang {args.pad_polyAhang} --pad_num_samples {args.pad_num_samples} --num_replicates {args.num_replicates} '
+    if args.pad_to_length is not None: 
             command += f'--pad_to_length {args.pad_to_length} '
     os.chdir(f'{args.output_prefix}_sbatch_results/{i}/')
     os.system(command)
@@ -326,6 +330,7 @@ elif args.window:
             for file in args.avoid_barcodes_files:
                 used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
 
+        # TODO should be new function?
         add_fixed_seq_and_barcode(f'{args.output_prefix}_windowed.fasta',
                                   f'{args.output_prefix}_library.fasta',
                                   seq5=args.seq5,
@@ -391,7 +396,8 @@ elif args.m2seq:
                                   #min_length_stem,  num_pads_reduce  max_length_stem
                                   pad_polyAhang = args.pad_polyAhang,
                                   pad_min_num_samples=args.pad_num_samples,
-                                  pad_to_length=args.pad_to_length)
+                                  pad_to_length=args.pad_to_length,
+                                  num_replicates=args.num_replicates)
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -439,7 +445,8 @@ elif args.m2seq_with_double:
                                   #min_length_stem,  num_pads_reduce  max_length_stem
                                   pad_polyAhang = args.pad_polyAhang,
                                   pad_min_num_samples=args.pad_num_samples,
-                                  pad_to_length=args.pad_to_length)
+                                  pad_to_length=args.pad_to_length,
+                                  num_replicates=args.num_replicates)
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
