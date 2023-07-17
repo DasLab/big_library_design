@@ -127,7 +127,7 @@ def parse_input_sequences(seqs):
                 for name_col, seq_col in name_seq_columns:
                     if name_col in cols and seq_col in cols:
                         return df.apply(lambda row: SeqIO.SeqRecord(Seq.Seq(_get_dna_from_SeqRecord(row[seq_col])),
-                                                  str(row[name_col]), '', ''), axis=1).to_list()
+                                                  name=str(row[name_col])), axis=1).to_list()
                 print("ERROR recognized tsv but did not recognize column nammes, please submmit and issue to request new input format.")
             else:
                 print("ERROR unrecognized input file extension, please submit an issue to have the input format recognized.")
@@ -212,7 +212,7 @@ def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
     SeqIO.write(good_seqs, out_file, "fasta")
 
 
-def get_used_barcodes(fasta, start, end):
+def get_used_barcodes(fasta, start, end, gu_present = False,num_bp=None):
     '''
     from a fasta file return all sequences between start and end inclusive
     '''
@@ -226,6 +226,13 @@ def get_used_barcodes(fasta, start, end):
         # end is inclusive
         barcode = seq[start:end+1]
         barcodes.append(str(barcode))
+        if gu_present:
+            stem5 = barcode[:num_bp]
+            stem3 = get_reverse_complement(barcode[-num_bp:])
+            if stem5!=stem3:
+                other_barcode = stem3+barcode[num_bp:-num+bp]+get_reverse_complement(stem5)
+                barcodes.append(other_barcode)
+        
     return barcodes
 
 
@@ -260,7 +267,8 @@ def _fill_in_any_incomplete(seq,seqs):
 
 
 def get_windows(fasta, window_length, window_slide, out_fasta=None,
-                circularize=False, fraction_use=1, reverse_complement=False):
+                circularize=False, fraction_use=1, reverse_complement=False,
+                viral_prep=False):
     '''
     Get sliding windows from an inputted fasta file.
 
@@ -286,9 +294,14 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     print(f'Getting all sliding windows, {window_length}nt every {window_slide}nt.')
 
     # get sequences and initialize
-    seqs = list(SeqIO.parse(fasta, "fasta"))
+    seqs = parse_input_sequences(fasta)
     windows = []
     unused_windows = []
+    if viral_prep:
+        print("TODO")
+        circularize = True
+        fraction_use = 2/3
+        reverse_complement = True
 
     for seq_rec in seqs:
 
@@ -307,7 +320,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                     new_seq = seq[a:b]
                     namenum = f'{a}-{b-1}'
                     if reverse_complement:
-                        new_rec = SeqIO.SeqRecord(Seq.Seq(_get_reverse_complement(new_seq)),
+                        new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
                                               f'{name}_rc', '', '')
                     else:
                         new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
@@ -338,7 +351,7 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                     name = f'{seq_rec.name}_amb{j}_{namenum}'
                 # save with name inclusive!
                 if reverse_complement:
-                    new_rec = SeqIO.SeqRecord(Seq.Seq(_get_reverse_complement(new_seq)),
+                    new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
                                           f'{name}_rc', '', '')
                 else:
                     new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
@@ -349,18 +362,18 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 else:
                     windows.append(new_rec)
 
-
     # remove and save fraction unused
-    if fraction_use != 1:
+    if fraction_use != 1 and not viral_prep:
         unused_file = f'{out_fasta.rsplit(".",1)[0]}_unused.{out_fasta.rsplit(".",1)[1]}'
         SeqIO.write(unused_windows, unused_file, "fasta")
         print(f'Saved unused windows to {unused_file}.')
-
+    
     # save file
     if out_fasta is not None:
         SeqIO.write(windows, out_fasta, "fasta")
         print(f'Saved windows to {out_fasta}.')
-
+    # TODO probably do this better organized tomorrow if viral_prep:
+    #    SeqIO.write(windowsB, f'{out_fasta.rsplit(".",1)[0]}_unused_A.{out_fasta.rsplit(".",1)[1]}'
     # return list of windows
     return windows
 
@@ -627,10 +640,11 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
         else:
             hang3 = uid[-num3hang:]
             stemA = uid[num5hang:-num3hang]
-        stemB = _get_reverse_complement(stemA)
+        stemB = get_reverse_complement(stemA)
 
         # put all barcode parts together
         seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)
+        # TODO this never actually checks edit distance...
         if seq not in used_barcodes:
             name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
             seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
@@ -2157,7 +2171,7 @@ def plot_all_bpp_from_fasta(fasta, save_image_folder):
 ###############################################################################
 
 
-def _get_reverse_complement(seq):
+def get_reverse_complement(seq):
     '''
     Return reverse complement of sequence, converts to DNA
     '''
@@ -2242,7 +2256,7 @@ def _get_random_barcode(num_bp=8, num5hang=0, num3hang=0,
     else:
         hang3 = uid[-num3hang:]
         stemA = uid[num5hang:-num3hang]
-    stemB = _get_reverse_complement(stemA)
+    stemB = get_reverse_complement(stemA)
 
     # put all barcode parts together
     seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)

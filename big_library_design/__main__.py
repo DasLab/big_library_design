@@ -85,7 +85,8 @@ library.add_argument('--barcode_file', type=str, default=None,
                      help='File with all possible barcodes specified.')
 library.add_argument('--num_replicates', type=int, default=1,
                      help='For each sequence of interest how many replicates to have with same sequence of interest but diffferent pad or barcode.')
-
+library.add_argument('--barcode_stem_gu_present', action='store_true',
+                     help='IF the list of used barcodes is a simple stem, but has GU pairs, this will check both side of the stem.')
 
 window = parser.add_argument_group('window')
 window.add_argument('--length', type=int, default=100,
@@ -121,7 +122,6 @@ m2seq.add_argument('--wcf_swap_only', action='store_true',
 double = parser.add_argument_group('double mutant')
 double.add_argument('--doublemut', nargs='+',
                     help='Two region to do double mutants of (one mutant in group A one in group B) format: 1-12,15.64-70,72-78 where this would mean one mutant in nucleotides 1 to 12 (inclusive) or 15 and one mutant in region 64 to 70 or 72 to 78. 1-12.1-12 would mean all double mutants in 1to 12. If more than one sequence is in the input need to specify the same number of regions separated by space eg for 2 sequences: 1-12,15.64-70,72-78 34-78.80-85 ')
-
 args = parser.parse_args()
 
 ###############################################################################
@@ -129,9 +129,11 @@ args = parser.parse_args()
 ###############################################################################
 
 if args.check_library:
-    barcodes = get_used_barcodes(args.input_fasta, args.avoid_barcodes_start, args.avoid_barcodes_end)
+    barcodes = get_used_barcodes(args.input_fasta, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp)
     print('Confirm these are barcodes, otherwise change --avoid_barcodes_start and --avoid_barcodes_end',sample(barcodes,5))
-    names = [s.name for s in list(SeqIO.parse(args.input_fasta, "fasta"))]
+    names = [s.name for s in parse_input_sequences(args.input_fasta)]
+    print(parse_input_sequences(args.input_fasta)[0])
+    print(names)
     if get_same_length(args.input_fasta)[0]:
         print("All sequences are of the same length.")
     else:
@@ -145,16 +147,22 @@ if args.check_library:
     all_good = True
     if args.min_edit == 2 and args.barcode_num5randomhang == 0:
         bp_barcodes = [x[:args.barcode_numbp] for x in barcodes]
+        eterna_temp = [get_reverse_complement(x[-args.barcode_numbp:]) for x in barcodes] 
         all_good = len(bp_barcodes)==len(set(bp_barcodes))
         if not all_good:
             print("ERROR, not all stem unqiue, printing duplicates")
             found_barcodes, found_barcodes_full = [],[]
             for i,(short_barcode,barcode) in enumerate(zip(bp_barcodes,barcodes)):
                 if short_barcode in found_barcodes:
-                    print(short_barcode,barcode,i)
-                    ind = found_barcodes.index(short_barcode)
-                    print(found_barcodes[ind],found_barcodes_full[ind],ind)
+                    print(barcode,names[i])
+                    ind = int(found_barcodes.index(short_barcode)/2)
+                    print(found_barcodes_full[ind],names[ind])
+                if eterna_temp[i] in found_barcodes:
+                    print(barcode,names[i])
+                    ind = int(found_barcodes.index(eterna_temp[i])/2)
+                    print(found_barcodes_full[ind],names[ind])
                 found_barcodes.append(short_barcode)
+                found_barcodes.append(eterna_temp[i])
                 found_barcodes_full.append(barcode)
     else:
         for i,x in tqdm(enumerate(barcodes)):
@@ -196,7 +204,7 @@ elif args.just_library:
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
-            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp))
     '''
     add_fixed_seq_and_barcode(fasta,
                               f'{args.output_prefix}_library.fasta',
@@ -253,12 +261,11 @@ elif args.just_library:
 
 
 elif args.just_library_sbatch:
-    print("NOT YET IMPLEMENTED.")
 
     used_barcodes = []
     if args.avoid_barcodes_files is not None:
         for file in args.avoid_barcodes_files:
-            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
+            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp))
 
     get_all_barcodes(out_fasta=f'{args.output_prefix}_all_unused_barcodes.fasta',
                      num_bp=args.barcode_numbp, 
@@ -363,7 +370,7 @@ elif args.window:
         used_barcodes = []
         if args.avoid_barcodes_files is not None:
             for file in args.avoid_barcodes_files:
-                used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
+                used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp))
 
         # TODO should be new function?
         add_fixed_seq_and_barcode(f'{args.output_prefix}_windowed.fasta',
@@ -404,7 +411,7 @@ elif args.m2seq:
         used_barcodes = []
         if args.avoid_barcodes_files is not None:
             for file in args.avoid_barcodes_files:
-                used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
+                used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp))
 
         add_library_elements(f'{args.output_prefix}_WT_single_mut.fasta', out_fasta=f'{args.output_prefix}_library.fasta', 
                                   share_pad=args.share_pad,
@@ -453,7 +460,7 @@ elif args.m2seq_with_double:
         used_barcodes = []
         if args.avoid_barcodes_files is not None:
             for file in args.avoid_barcodes_files:
-                used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end))
+                used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp))
 
         add_library_elements(f'{args.output_prefix}_WT_single_double_mut.fasta', out_fasta=f'{args.output_prefix}_library.fasta', 
                                   share_pad=args.share_pad,
