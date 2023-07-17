@@ -298,10 +298,10 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     windows = []
     unused_windows = []
     if viral_prep:
-        print("TODO")
         circularize = True
-        fraction_use = 2/3
-        reverse_complement = True
+        first_third = floor((1/3)*len(seq))
+        second_third = floor((2/3)*len(seq))
+        windowsA,windowsB,windowsC = [],[],[]
 
     for seq_rec in seqs:
 
@@ -319,17 +319,34 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                     a, b = len(seq)-window_length, len(seq)
                     new_seq = seq[a:b]
                     namenum = f'{a}-{b-1}'
-                    if reverse_complement:
-                        new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
-                                              f'{name}_rc', '', '')
-                    else:
+                    if viral_prep:
                         new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
                                               f'{seq_rec.name}_{namenum}',
                                               '', '')
-                    if fraction_use != 1 and ((i + window_length-1) > window_limit):
-                        unused_windows.append(new_rec)
+                        new_recrc = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
+                                              f'{name}_rc', '', '')
+                        current_loc = (i + (window_length-1)/2)
+                        if current_loc < first_thid:
+                            windowsA.append(new_rec)
+                            windowsC.append(new_recrc)
+                        elif current_loc < second_third:
+                            windowsA.append(new_rec)
+                            windowsB.append(new_recrc)
+                        else:
+                            windowsC.append(new_rec)
+                            windowsB.append(new_recrc)
                     else:
-                        windows.append(new_rec)
+                        if reverse_complement:
+                            new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
+                                                  f'{name}_rc', '', '')
+                        else:
+                            new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
+                                                  f'{seq_rec.name}_{namenum}',
+                                                  '', '')
+                        if fraction_use != 1 and ((i + (window_length-1)/2) > window_limit):
+                            unused_windows.append(new_rec)
+                        else:
+                            windows.append(new_rec)
                     break
 
                 # or circularize and add from 5' until very end
@@ -350,17 +367,34 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 else:
                     name = f'{seq_rec.name}_amb{j}_{namenum}'
                 # save with name inclusive!
-                if reverse_complement:
-                    new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
-                                          f'{name}_rc', '', '')
-                else:
+                if viral_prep:
                     new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
                                           f'{seq_rec.name}_{namenum}',
                                           '', '')
-                if fraction_use != 1 and ((i + window_length-1) > window_limit):
-                    unused_windows.append(new_rec)
+                    new_recrc = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
+                                          f'{name}_rc', '', '')
+                    current_loc = (i + (window_length-1)/2)
+                    if current_loc < first_thid:
+                        windowsA.append(new_rec)
+                        windowsC.append(new_recrc)
+                    elif current_loc < second_third:
+                        windowsA.append(new_rec)
+                        windowsB.append(new_recrc)
+                    else:
+                        windowsC.append(new_rec)
+                        windowsB.append(new_recrc)
                 else:
-                    windows.append(new_rec)
+                    if reverse_complement:
+                        new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
+                                              f'{name}_rc', '', '')
+                    else:
+                        new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
+                                              f'{seq_rec.name}_{namenum}',
+                                              '', '')
+                    if fraction_use != 1 and ((i + (window_length-1)/2) > window_limit):
+                        unused_windows.append(new_rec)
+                    else:
+                        windows.append(new_rec)
 
     # remove and save fraction unused
     if fraction_use != 1 and not viral_prep:
@@ -372,9 +406,12 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     if out_fasta is not None:
         SeqIO.write(windows, out_fasta, "fasta")
         print(f'Saved windows to {out_fasta}.')
-    # TODO probably do this better organized tomorrow if viral_prep:
-    #    SeqIO.write(windowsB, f'{out_fasta.rsplit(".",1)[0]}_unused_A.{out_fasta.rsplit(".",1)[1]}'
-    # return list of windows
+
+    if viral_prep:
+        SeqIO.write(windowsA, f'{out_fasta.rsplit(".",1)[0]}_A.{out_fasta.rsplit(".",1)[1]}')
+        SeqIO.write(windowsB, f'{out_fasta.rsplit(".",1)[0]}_B.{out_fasta.rsplit(".",1)[1]}')
+        SeqIO.write(windowsC, f'{out_fasta.rsplit(".",1)[0]}_C.{out_fasta.rsplit(".",1)[1]}')
+
     return windows
 
 

@@ -101,6 +101,8 @@ window.add_argument('--prop_windows_keep', type=float, default=1.0,
                     help='The proportion of windows to keep (from the start), others not added to library.')
 window.add_argument('--prop_windows_keep_random', type=float, default=1.0,
                     help='The proportion of windows to keep (randomly selected), others not added to library.')
+window.add_argument('--viral_prep', action='store_true',
+                    help='Use default viral genome splits (max 2/3 in each library), reverse complement, and circularization included.')
 
 m2seq = parser.add_argument_group(
     'padding for: m2seq or just_library when length not equal')
@@ -362,7 +364,8 @@ elif args.window:
                 f'{args.output_prefix}_windowed.fasta',
                 circularize=args.circularize,
                 reverse_complement=args.reverse_complement,
-                fraction_use=args.prop_windows_keep)
+                fraction_use=args.prop_windows_keep,
+                viral_prep=args.viral_prep)
     if args.prop_windows_keep_random != 1:
         randomly_select_seqs(f'{args.output_prefix}_windowed.fasta', f'{args.output_prefix}_windowed_rejected.fasta', args.prop_windows_keep_random)
 
