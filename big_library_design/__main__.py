@@ -2,7 +2,7 @@ import argparse
 import time
 from glob import glob
 from big_library_design.mutational_utils import *
-
+from shutil import copy
 
 ###############################################################################
 # Arguments
@@ -87,7 +87,8 @@ library.add_argument('--num_replicates', type=int, default=1,
                      help='For each sequence of interest how many replicates to have with same sequence of interest but diffferent pad or barcode.')
 library.add_argument('--barcode_stem_gu_present', action='store_true',
                      help='IF the list of used barcodes is a simple stem, but has GU pairs, this will check both side of the stem.')
-
+library.add_argument('--pad_polyAhang_other_side',type=int,default=0,
+                      help='Number nucleotides (only +1 possible) to have a polyA, single-stranded hang between sequence and library element on 3end.'  )
 window = parser.add_argument_group('window')
 window.add_argument('--length', type=int, default=100,
                     help='Length of each window to create.')
@@ -256,28 +257,36 @@ elif args.just_library:
                               pad_min_num_samples=args.pad_num_samples,
                               pad_to_length=args.pad_to_length,
                               barcode_file=args.barcode_file,
-                              num_replicates=args.num_replicates)
+                              num_replicates=args.num_replicates,
+                              pad_polyAhang_other_side=args.pad_polyAhang_other_side)
 
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
     format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
 
 elif args.just_library_sbatch:
+    base_dir = os.getcwd()
+    if args.barcode_file is None:
+        print("generating barcode")
+        used_barcodes = []
+        if args.avoid_barcodes_files is not None:
+            for file in args.avoid_barcodes_files:
+                used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp))
 
-    used_barcodes = []
-    if args.avoid_barcodes_files is not None:
-        for file in args.avoid_barcodes_files:
-            used_barcodes.extend(get_used_barcodes(file, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp))
-
-    get_all_barcodes(out_fasta=f'{args.output_prefix}_all_unused_barcodes.fasta',
-                     num_bp=args.barcode_numbp, 
-                     num5hang=args.barcode_num5randomhang, 
-                     num3hang=0,
-                     polyA5=args.barcode_num5polyA, 
-                     polyA3=0,
-                     loop=args.barcode_loop,
-                     used_barcodes=used_barcodes,
-                     shuffle_barcodes=True)
+        get_all_barcodes(out_fasta=f'{args.output_prefix}_all_unused_barcodes.fasta',
+                         num_bp=args.barcode_numbp, 
+                         num5hang=args.barcode_num5randomhang, 
+                         num3hang=0,
+                         polyA5=args.barcode_num5polyA, 
+                         polyA3=0,
+                         loop=args.barcode_loop,
+                         used_barcodes=used_barcodes,
+                         shuffle_barcodes=True)
+    else:
+        print('Getting barcodes from file.')
+        #TODO barcodes = SeqIO.parse(args.barcode_file)
+        # need barcode folder option... and has to do this after knowing numberjobs?
+        
 
     if not os.path.isdir(f'{args.output_prefix}_sbatch_results'):
         os.mkdir(f'{args.output_prefix}_sbatch_results')
@@ -286,7 +295,9 @@ elif args.just_library_sbatch:
         ### num para
         print("Splitting barcodes and sequences.")
         split_fasta_file(args.input_fasta,args.sbatch_processes,f'{args.output_prefix}_sbatch_results','seqs.fasta')
-        split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',args.sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
+        for i in range(args.sbatch_processes):
+            copy(f'{args.barcode_file}/{i}_all_unused_barcodes_new.fasta', f'{args.output_prefix}_sbatch_results/{i}/barcodes.fasta')
+        # TODO split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',args.sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
         sbatch_processes = args.sbatch_processes
         
     elif args.share_pad == 'same_origin':
@@ -301,8 +312,9 @@ elif args.just_library_sbatch:
                 seqs_by_origin[origin] = [seq]
         sbatch_processes = len(seqs_by_origin.keys())
         print(f"splitting into {sbatch_processes}, one for each origin")
-        split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
-
+        #s TODO plit_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
+        for i in range(args.sbatch_processes):
+            copy(f'{args.barcode_file}/{i}_all_unused_barcodes_new.fasta', f'{args.output_prefix}_sbatch_results/{i}/barcodes.fasta')
         for i,(origin,seqs) in enumerate(seqs_by_origin.items()):
             SeqIO.write(seqs,f'{args.output_prefix}_sbatch_results/{i}/seq.fasta',"fasta")
 
@@ -315,7 +327,7 @@ elif args.just_library_sbatch:
         command += f'--share_pad {args.share_pad} --seq5 {args.seq5} --seq3 {args.seq3} --barcode_numbp {args.barcode_numbp} '
         command += f'--barcode_num5randomhang {args.barcode_num5randomhang} --barcode_num5polyA {args.barcode_num5polyA} '
         command += f'--barcode_loop {args.barcode_loop} --Pmax_noninteract {args.Pmax_noninteract} --Pmin_unpaired {args.Pmin_unpaired} '
-        command += f'--Pavg_unpaired {args.Pavg_unpaired} --Pmin_paired {args.Pmin_paired} --Pavg_paired {args.Pavg_paired} '
+        command += f'--Pavg_unpaired {args.Pavg_unpaired} --Pmin_paired {args.Pmin_paired} --Pavg_paired {args.Pavg_paired} --pad_polyAhang_other_side {args.pad_polyAhang_other_side} '
         command += f'--save_image_folder {args.save_image_folder} --save_bpp_fig {args.save_bpp_fig} --max_seq_punpaired_plot {args.max_seq_punpaired_plot} '
         command += f'--num_barcodes_reduce_prob {args.num_barcodes_reduce_prob} --min_edit {args.min_edit} --pad_loop {args.pad_loop} --pad_hang {args.pad_hang} '
         command += f'--pad_polyAhang {args.pad_polyAhang} --pad_num_samples {args.pad_num_samples} --num_replicates {args.num_replicates} '
@@ -327,14 +339,14 @@ elif args.just_library_sbatch:
             f.write(command)
         os.chdir(f'{args.output_prefix}_sbatch_results/{i}/')
         os.system(f'sbatch run.sbatch')
-        os.chdir(f'../..')
+        os.chdir(base_dir)
 
     i = 0
     command = f'python -m big_library_design --just_library -i seqs.fasta -o out --barcode_file barcodes.fasta '
     command += f'--share_pad {args.share_pad} --seq5 {args.seq5} --seq3 {args.seq3} --barcode_numbp {args.barcode_numbp} '
     command += f'--barcode_num5randomhang {args.barcode_num5randomhang} --barcode_num5polyA {args.barcode_num5polyA} '
     command += f'--barcode_loop {args.barcode_loop} --Pmax_noninteract {args.Pmax_noninteract} --Pmin_unpaired {args.Pmin_unpaired} '
-    command += f'--Pavg_unpaired {args.Pavg_unpaired} --Pmin_paired {args.Pmin_paired} --Pavg_paired {args.Pavg_paired} '
+    command += f'--Pavg_unpaired {args.Pavg_unpaired} --Pmin_paired {args.Pmin_paired} --Pavg_paired {args.Pavg_paired} --pad_polyAhang_other_side {args.pad_polyAhang_other_side} '
     command += f'--save_image_folder {args.save_image_folder} --save_bpp_fig {args.save_bpp_fig} --max_seq_punpaired_plot {args.max_seq_punpaired_plot} '
     command += f'--num_barcodes_reduce_prob {args.num_barcodes_reduce_prob} --min_edit {args.min_edit} --pad_loop {args.pad_loop} --pad_hang {args.pad_hang} '
     command += f'--pad_polyAhang {args.pad_polyAhang} --pad_num_samples {args.pad_num_samples} --num_replicates {args.num_replicates} '
@@ -342,18 +354,22 @@ elif args.just_library_sbatch:
             command += f'--pad_to_length {args.pad_to_length} '
     os.chdir(f'{args.output_prefix}_sbatch_results/{i}/')
     os.system(command)
-    os.chdir(f'../..')
+    os.chdir(base_dir)
     #do again
 
     # wait until all done
-    num_done = len(glob(f'{args.output_prefix}_sbatch_results/*/out_library.txt'))
+    num_done = len(glob(f'{args.output_prefix}_sbatch_results/*/out_library.fasta'))
     while num_done < sbatch_processes:
         print(f"waiting for {sbatch_processes-num_done} processes to be done, checking again in 30sec")
         time.sleep(30)
-        num_done = len(glob(f'{args.output_prefix}_sbatch_results/*/out_library.txt'))
+        num_done = len(glob(f'{args.output_prefix}_sbatch_results/*/out_library.fasta'))
     # combine
-    combine_fastas(glob(f'{args.output_prefix}_sbatch_results/*/out_library.txt'),f'{args.output_prefix}_library.fasta')
-    
+    combine_fastas(glob(f'{args.output_prefix}_sbatch_results/*/out_library.fasta'),f'{args.output_prefix}_library.fasta')
+    for i in range(sbatch_processes):
+        barcodes = get_used_barcodes(f'{args.output_prefix}_sbatch_results/{i}/out_library.fasta', args.avoid_barcodes_start, args.avoid_barcodes_end, False, args.barcode_numbp)
+        delete_used_barcodes(f'{args.output_prefix}_sbatch_results/{i}/barcodes.fasta',barcodes,f'{args.output_prefix}_sbatch_results/{i}/barcodes_left.fasta')
+    combine_fastas(glob(f'{args.output_prefix}_sbatch_results/*/barcodes_left.fasta'),f'{args.output_prefix}_all_barcodes_left.fasta')
+
 
 ###############################################################################
 # Window
@@ -442,7 +458,8 @@ elif args.m2seq:
                                   pad_polyAhang = args.pad_polyAhang,
                                   pad_min_num_samples=args.pad_num_samples,
                                   pad_to_length=args.pad_to_length,
-                                  num_replicates=args.num_replicates)
+                                  num_replicates=args.num_replicates,
+                              pad_polyAhang_other_side=args.pad_polyAhang_other_side)
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 
@@ -491,7 +508,8 @@ elif args.m2seq_with_double:
                                   pad_polyAhang = args.pad_polyAhang,
                                   pad_min_num_samples=args.pad_num_samples,
                                   pad_to_length=args.pad_to_length,
-                                  num_replicates=args.num_replicates)
+                                  num_replicates=args.num_replicates,
+                              pad_polyAhang_other_side=args.pad_polyAhang_other_side)
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.csv', file_format='twist')
         format_fasta_for_submission(f'{args.output_prefix}_library.fasta', f'{args.output_prefix}_library.txt', file_format='custom_array')
 

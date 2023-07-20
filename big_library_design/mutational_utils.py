@@ -61,20 +61,20 @@ def combine_fastas(fastas, out_fasta):
 
     SeqIO.write(all_seqs, out_fasta, "fasta")
 
-def split_fasta_file(fasta,N,folder,name):
+def split_fasta_file(fasta,N,folder,name,offset=0):
     if not os.path.isdir(folder):
         os.mkdir(folder)
 
     seqs = list(SeqIO.parse(fasta, "fasta"))
-    len_seqs = len(seqs)//N
+    len_seqs = (len(seqs)//(N))+1
 
 
     for n in range(N):
-        if not os.path.isdir(f'{folder}/{n}'):
-            os.mkdir(f'{folder}/{n}')
+        if not os.path.isdir(f'{folder}/{n+offset}'):
+            os.mkdir(f'{folder}/{n+offset}')
 
         seqset = seqs[len_seqs*n:min(len_seqs*(n+1),len(seqs))]
-        SeqIO.write(seqset,f'{folder}/{n}/{name}',"fasta")
+        SeqIO.write(seqset,f'{folder}/{n+offset}/{name}',"fasta")
 
 def format_fasta_for_submission(fasta, out_file, file_format='twist'):
     '''
@@ -91,7 +91,7 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
         names = []
         seqs = []
         for seq in SeqIO.parse(fasta, "fasta"):
-            names.append(seq.name)
+            names.append(get_name_SeqRecord(seq))
             seqs.append(_get_dna_from_SeqRecord(seq))
         df = pd.DataFrame(np.array([names, seqs]).T,
                           columns=["name", "sequence"])
@@ -114,6 +114,24 @@ def format_fasta_for_submission(fasta, out_file, file_format='twist'):
         print('file_format not supported, available: custom_array twist agilent')
 
 
+def remove_library_elements(fasta,out_fasta,lenbarcode,len5=len(SEQ5),len3=len(SEQ3)):
+    seqs = parse_input_sequences(fasta)
+    strip_seqs = []
+    for seq_rec in seqs:
+        seq = seq_rec.seq
+        pad5_length,pad3_length = _get_pad_length_from_name(get_name_SeqRecord(seq_rec))
+        new_seq = seq[len5+pad5_length:len(seq)-(len3+lenbarcode+pad3_length)]
+        name = seq_rec.name
+        new_name = []
+        for x in name.split('_'):
+            if 'pad' not in x and 'libraryready' not in x:
+                new_name.append(x)
+        strip_seqs.append(SeqIO.SeqRecord(new_seq,'_'.join(new_name),'',''))
+    SeqIO.write(strip_seqs, out_fasta, "fasta")
+
+
+
+
 def parse_input_sequences(seqs):
     if type(seqs)==str:
         if os.path.isfile(seqs):
@@ -126,6 +144,7 @@ def parse_input_sequences(seqs):
                 name_seq_columns = [['id','sequence']]
                 for name_col, seq_col in name_seq_columns:
                     if name_col in cols and seq_col in cols:
+                        df[seq_col] = df[seq_col].str.strip()
                         return df.apply(lambda row: SeqIO.SeqRecord(Seq.Seq(_get_dna_from_SeqRecord(row[seq_col])),
                                                   name=str(row[name_col])), axis=1).to_list()
                 print("ERROR recognized tsv but did not recognize column nammes, please submmit and issue to request new input format.")
@@ -176,26 +195,28 @@ def get_same_length(fasta):
     return _get_same_length(seqs)
 
 
-def check_sequences_contents(fasta,seq5=SEQ5, seq3=SEQ3,bases=BASES):
+def check_sequences_contents(fasta,seq5=SEQ5, seq3=SEQ3,bases=BASES,content_only=False):
     problems = []
     names = []
     sequences = []
     seqs = list(SeqIO.parse(fasta, "fasta"))
     for seq_rec in seqs:
         seq = _get_dna_from_SeqRecord(seq_rec)
-        if seq in sequences:
-            problems.append(f"{seq_rec.name} is a repeated sequence.")
-        if seq_rec.name in names:
-            problems.append(f"{seq_rec.name} is a repeated name.")
-        if seq[:len(seq5)] != seq5:
-            problems.append(f"{seq_rec.name} has incorrect 5' sequence.")
-        if seq[-len(seq3):] != seq3:
-            problems.append(f"{seq_rec.name} has incorrect 3' sequence.")
+        if not content_only:
+            if seq in sequences:
+                problems.append(f"{get_name_SeqRecord(seq_rec)} is a repeated sequence.")
+            if get_name_SeqRecord(seq_rec)in names:
+                problems.append(f"{get_name_SeqRecord(seq_rec)} is a repeated name+description.")
+            if seq[:len(seq5)] != seq5:
+                problems.append(f"{get_name_SeqRecord(seq_rec)} has incorrect 5' sequence.")
+            if seq[-len(seq3):] != seq3:
+                problems.append(f"{get_name_SeqRecord(seq_rec)} has incorrect 3' sequence.")
+            sequences.append(seq)
+            names.append(get_name_SeqRecord(seq_rec))
         for n in seq:
             if n not in bases:
-                problems.append(f"{seq_rec.name} has non {bases} base.")
-        sequences.append(seq)
-        names.append(seq_rec.name)
+                problems.append(f"{get_name_SeqRecord(seq_rec)} has non {bases} base.")
+        
     return len(problems)==0, problems
 
 def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
@@ -212,13 +233,14 @@ def remove_seqs_already_in_other_file(fasta, other_fasta, out_file):
     SeqIO.write(good_seqs, out_file, "fasta")
 
 
-def get_used_barcodes(fasta, start, end, gu_present = False,num_bp=None):
+def get_used_barcodes(fasta, start, end, gu_present = False,num_bp=None,unique=True):
     '''
     from a fasta file return all sequences between start and end inclusive
     '''
 
     all_seqs = parse_input_sequences(fasta)
     test_barcode = _get_dna_from_SeqRecord(all_seqs[0])[start:end+1]
+    print(_get_dna_from_SeqRecord(all_seqs[0]))
     print(f"Confirm {test_barcode} is a correct barcode, otherwise change start and end.")
     barcodes = []
     for record in all_seqs:
@@ -230,10 +252,11 @@ def get_used_barcodes(fasta, start, end, gu_present = False,num_bp=None):
             stem5 = barcode[:num_bp]
             stem3 = get_reverse_complement(barcode[-num_bp:])
             if stem5!=stem3:
-                other_barcode = stem3+barcode[num_bp:-num+bp]+get_reverse_complement(stem5)
+                other_barcode = stem3+barcode[num_bp:-num_bp]+get_reverse_complement(stem5)
                 barcodes.append(other_barcode)
-        
-    return barcodes
+    if unique:
+        barcodes = list(set(barcodes))
+    return sorted(barcodes)
 
 
 ###############################################################################
@@ -297,16 +320,17 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
     seqs = parse_input_sequences(fasta)
     windows = []
     unused_windows = []
-    if viral_prep:
-        circularize = True
-        first_third = floor((1/3)*len(seq))
-        second_third = floor((2/3)*len(seq))
-        windowsA,windowsB,windowsC = [],[],[]
+    windowsA, windowsB, windowsC, windowsD, windowsE, windowsF = [],[],[],[],[],[]
 
-    for seq_rec in seqs:
-
+    for j,seq_rec in enumerate(seqs):
+        #print(j)
         # loop through sequence every window_slide nucleotides
         seq = _get_dna_from_SeqRecord(seq_rec)
+        if viral_prep:
+            circularize = True
+            first_third = floor((1/3)*len(seq))
+            second_third = floor((2/3)*len(seq))
+            third_third = floor((4/3)*len(seq))-window_length+window_slide
         window_limit = floor(fraction_use*len(seq))
 
         for i in range(0, len(seq), window_slide):
@@ -321,29 +345,32 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                     namenum = f'{a}-{b-1}'
                     if viral_prep:
                         new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
-                                              f'{seq_rec.name}_{namenum}',
+                                              f'{get_name_SeqRecord(seq_rec)}_{namenum}',
                                               '', '')
                         new_recrc = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
                                               f'{name}_rc', '', '')
-                        current_loc = (i + (window_length-1)/2)
-                        if current_loc < first_thid:
-                            windowsA.append(new_rec)
-                            windowsC.append(new_recrc)
-                        elif current_loc < second_third:
+                        current_loc = (i + (window_length-1))
+                        #if current_loc < first_third:
+                        #    windowsA.append(new_rec)
+                        #    windowsC.append(new_recrc)
+                        if current_loc < second_third:
                             windowsA.append(new_rec)
                             windowsB.append(new_recrc)
-                        else:
+                        elif current_loc < third_third:
                             windowsC.append(new_rec)
-                            windowsB.append(new_recrc)
+                            windowsD.append(new_recrc)
+                        else: 
+                            windowsE.append(new_rec)
+                            windowsF.append(new_recrc)
                     else:
                         if reverse_complement:
                             new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
                                                   f'{name}_rc', '', '')
                         else:
                             new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
-                                                  f'{seq_rec.name}_{namenum}',
+                                                  f'{get_name_SeqRecord(seq_rec)}_{namenum}',
                                                   '', '')
-                        if fraction_use != 1 and ((i + (window_length-1)/2) > window_limit):
+                        if fraction_use != 1 and ((i + (window_length-1)) > window_limit):
                             unused_windows.append(new_rec)
                         else:
                             windows.append(new_rec)
@@ -359,39 +386,45 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
                 a, b = i, i+window_length
                 new_seq = seq[a:b]
                 namenum = f'{a}-{b-1}'
-
-            new_seqs = _fill_in_any_incomplete(new_seq,[new_seq])
+            if len(new_seq)*0.9>new_seq.count('A')+new_seq.count('C')+new_seq.count('T')+new_seq.count('G'):
+                print(f'window {new_seq} to uncertain deleting')
+                new_seqs = []
+            else:
+                new_seqs = _fill_in_any_incomplete(new_seq,[new_seq])
             for j,new_seq in enumerate(new_seqs):
                 if len(new_seqs) == 1:
-                    name = f'{seq_rec.name}_{namenum}'
+                    name = f'{get_name_SeqRecord(seq_rec)}_{namenum}'
                 else:
-                    name = f'{seq_rec.name}_amb{j}_{namenum}'
+                    name = f'{get_name_SeqRecord(seq_rec)}_amb{j}_{namenum}'
                 # save with name inclusive!
                 if viral_prep:
                     new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
-                                          f'{seq_rec.name}_{namenum}',
+                                          f'{get_name_SeqRecord(seq_rec)}_{namenum}',
                                           '', '')
                     new_recrc = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
                                           f'{name}_rc', '', '')
-                    current_loc = (i + (window_length-1)/2)
-                    if current_loc < first_thid:
-                        windowsA.append(new_rec)
-                        windowsC.append(new_recrc)
-                    elif current_loc < second_third:
+                    current_loc = (i + (window_length-1))
+                    #if current_loc < first_third:
+                    #    windowsA.append(new_rec)
+                    #    windowsC.append(new_recrc)
+                    if current_loc < second_third:
                         windowsA.append(new_rec)
                         windowsB.append(new_recrc)
-                    else:
+                    elif current_loc < third_third:
                         windowsC.append(new_rec)
-                        windowsB.append(new_recrc)
+                        windowsD.append(new_recrc)
+                    else:
+                        windowsE.append(new_rec)
+                        windowsF.append(new_recrc)
                 else:
                     if reverse_complement:
                         new_rec = SeqIO.SeqRecord(Seq.Seq(get_reverse_complement(new_seq)),
                                               f'{name}_rc', '', '')
                     else:
                         new_rec = SeqIO.SeqRecord(Seq.Seq(new_seq),
-                                              f'{seq_rec.name}_{namenum}',
+                                              f'{get_name_SeqRecord(seq_rec)}_{namenum}',
                                               '', '')
-                    if fraction_use != 1 and ((i + (window_length-1)/2) > window_limit):
+                    if fraction_use != 1 and ((i + (window_length-1)) > window_limit):
                         unused_windows.append(new_rec)
                     else:
                         windows.append(new_rec)
@@ -403,17 +436,31 @@ def get_windows(fasta, window_length, window_slide, out_fasta=None,
         print(f'Saved unused windows to {unused_file}.')
     
     # save file
-    if out_fasta is not None:
+    if out_fasta is not None and not viral_prep:
         SeqIO.write(windows, out_fasta, "fasta")
         print(f'Saved windows to {out_fasta}.')
 
     if viral_prep:
-        SeqIO.write(windowsA, f'{out_fasta.rsplit(".",1)[0]}_A.{out_fasta.rsplit(".",1)[1]}')
-        SeqIO.write(windowsB, f'{out_fasta.rsplit(".",1)[0]}_B.{out_fasta.rsplit(".",1)[1]}')
-        SeqIO.write(windowsC, f'{out_fasta.rsplit(".",1)[0]}_C.{out_fasta.rsplit(".",1)[1]}')
-
+        SeqIO.write(windowsA, f'{out_fasta.rsplit(".",1)[0]}_A.{out_fasta.rsplit(".",1)[1]}','fasta')
+        SeqIO.write(windowsB, f'{out_fasta.rsplit(".",1)[0]}_B.{out_fasta.rsplit(".",1)[1]}','fasta')
+        SeqIO.write(windowsC, f'{out_fasta.rsplit(".",1)[0]}_C.{out_fasta.rsplit(".",1)[1]}','fasta')
+        SeqIO.write(windowsD, f'{out_fasta.rsplit(".",1)[0]}_D.{out_fasta.rsplit(".",1)[1]}','fasta')
+        SeqIO.write(windowsE, f'{out_fasta.rsplit(".",1)[0]}_E.{out_fasta.rsplit(".",1)[1]}','fasta')
+        SeqIO.write(windowsF, f'{out_fasta.rsplit(".",1)[0]}_F.{out_fasta.rsplit(".",1)[1]}','fasta')
     return windows
 
+def clean_fasta(fasta,out_fasta):
+    seqs = parse_input_sequences(fasta)
+    cleaned = []
+    for seq in seqs:
+        cleaned.append(SeqIO.SeqRecord(Seq.Seq(_get_dna_from_SeqRecord(seq)),get_name_SeqRecord(seq),'',''))
+    SeqIO.write(cleaned,out_fasta,'fasta')
+
+def get_name_SeqRecord(seq):
+    name = str(seq.name)
+    if seq.description != '<unknown description>':
+        name += seq.description
+    return name.replace('/','__').replace(' ','_')
 
 def get_all_single_mutants(fasta, out_fasta=None, mutational_dict=None, bases=BASES):
     '''
@@ -437,7 +484,7 @@ def get_all_single_mutants(fasta, out_fasta=None, mutational_dict=None, bases=BA
     print("Getting all single mutants.")
 
     # get all sequences and initialize
-    all_WT = SeqIO.parse(fasta, "fasta")
+    all_WT = parse_input_sequences(fasta)
     all_single_mutants = []
 
     # TODO cannot handle non ACTG?
@@ -638,11 +685,47 @@ def add_known_pads(fasta, pad5_dict, pad3_dict, out_fasta=None):
     return all_seqs
 
 
+def delete_used_barcodes(all_barcode,used_barcodes,out_fasta):
+    print('barcod')
+    all_uids = list(SeqIO.parse(all_barcode, "fasta"))
+    all_uids = [(_get_dna_from_SeqRecord(uid.seq),uid.name) for uid in all_uids]
+    print('now sorting')
+    all_uids = sorted(all_uids)
+    used_barcodes = sorted(used_barcodes)
+    print('got_all now filtering')
+    new_uids = []
+    #new_uids_filter = list(filter(lambda i: i[0] not in used_barcodes, all_uids))
+    for i,uid in enumerate(all_uids):
+        if i % 1000000==0:
+            print(i) 
+        if len(used_barcodes)>0:       
+            while uid[0] > used_barcodes[0]:
+                x=used_barcodes.pop(0)
+                if len(used_barcodes)==0:
+                    break
+            if len(used_barcodes)>0:  
+                if uid[0] != used_barcodes[0]:
+                    new_uids.append(SeqIO.SeqRecord(Seq.Seq(uid[0]),uid[1],'',''))
+        else:
+            new_uids.append(SeqIO.SeqRecord(Seq.Seq(uid[0]),uid[1],'',''))
+
+    print('now writing')
+    
+    #for i,uid in enumerate(new_uids_filter):
+    #    if i % 1000000:
+    #        print(i)
+    #    new_uids.append(SeqIO.SeqRecord(Seq.Seq(uid[0]),uid[1],'',''))
+    shuffle(new_uids)
+    print(f'deleted {len(all_uids)-len(new_uids)} barcodes')
+    SeqIO.write(new_uids, out_fasta, "fasta")
+
+
 def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
                      polyA5=0, polyA3=0,
                      loop=TETRALOOP, bases=BASES,
                      used_barcodes=[],
-                     shuffle_barcodes=True):
+                     shuffle_barcodes=True,
+                     used_barcodes_sorted=True):
     '''
     Return all barcodes of specified structure
 
@@ -659,14 +742,31 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
     Returns:
         list of SeqRecord of all possible barcodes
         if out_fasta specified, also saves these to fasta file
-
+st = time()
+get_all_barcodes(num_bp=10)
+en = time()
+en-st
+2.1671266555786133
+st = time()
+get_all_barcodes(num_bp=12,out_fasta='Temp.txt')
+en = time()
+en-st
+39
     '''
 
     print("Getting all possible barcodes.")
     all_barcodes = []
-
+    # slight speed up
+    # also if ordered gaurenteed can pop!!!!
+    if num5hang+num3hang == 0:
+        used_barcodes = [barcode[:num_bp] for barcode in used_barcodes]
     # get all possible combinations of bases for random/barcode regions
+    i=0
+
+    #if out_fasta is not None:
+    #    f = open(out_fasta,'w')
     for x in product(bases, repeat=num5hang+num_bp+num3hang):
+        
         uid = ''.join(x)
 
         # split barcode in stem and hang regions
@@ -682,15 +782,30 @@ def get_all_barcodes(out_fasta=None, num_bp=8, num5hang=0, num3hang=0,
         # put all barcode parts together
         seq = ("A"*polyA5)+hang5+stemA+loop+stemB+hang3+("A"*polyA3)
         # TODO this never actually checks edit distance...
-        if seq not in used_barcodes:
-            name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
-            seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
-            all_barcodes.append(seq_rec)
-
+        if used_barcodes_sorted and used_barcodes!=[] and num5hang+num3hang==0:
+            if seq[:num_bp] != used_barcodes[0]:
+                name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
+                seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
+                all_barcodes.append(seq_rec)
+            else: 
+                while seq[:num_bp] == used_barcodes[0]:
+                    used_barcodes.pop(0)
+                    if len(used_barcodes)==0:
+                        break
+        else:
+            if seq not in used_barcodes:
+                name = f' stem{stemA}_{hang5}hang{hang3}_{polyA5}polyA{polyA3}'
+                seq_rec = SeqIO.SeqRecord(Seq.Seq(seq), name, '', '')
+                all_barcodes.append(seq_rec)
+        i+=1
+        #if i%1000000==0: print(i,seq[:num_bp],used_barcodes[0])
+    print(len(used_barcodes))
+    print("shuffling barcodes")
     if shuffle_barcodes:
         shuffle(all_barcodes)
     # save
     if out_fasta is not None:
+        #open(out_fasta,'w').wrte('\n'.join(all_barcodes))
         SeqIO.write(all_barcodes, out_fasta, "fasta")
         print(f'Saved all barcodes to {out_fasta}.')
 
@@ -797,7 +912,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
 
                     # get full sequence and check structure
                     full_seq = pad5+_get_dna_from_SeqRecord(seq)+pad3
-                    full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}'
+                    full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}'
                     struct_results = check_struct_bpp(full_seq,
                                                       regions['unpaired'], [regions['pairedA']],
                                                       [regions['pairedB']], regions['noninteractA'], regions['noninteractB'],
@@ -895,7 +1010,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
             pad5, pad3 = pads_by_len[seq_length]
             for seq in list(seqs):
                 full_seq = pad5+_get_dna_from_SeqRecord(seq)+pad3
-                full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}'
+                full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}'
                 padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
                                              full_seq_name, '', '')
                 padded_seqs.append(padded_seq)
@@ -991,7 +1106,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
                     pad3 = _get_dna_from_SeqRecord(pad3_full[-cutoff[1]:])
                 seq = _get_dna_from_SeqRecord(seq_rec)
                 full_seq = pad5 + seq + pad3
-                name = f'{seq_rec.name}_{len(pad5)}pad{len(pad3)}'
+                name = f'{get_name_SeqRecord(seq_rec)}_{len(pad5)}pad{len(pad3)}'
                 padded_seqs.append(SeqIO.SeqRecord(
                     Seq.Seq(full_seq), name, '', ''))
             else:
@@ -1138,7 +1253,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
 
         # get sequence and name
         seq = _get_dna_from_SeqRecord(seq_rec)
-        name = seq_rec.name+'_libraryready'
+        name = get_name_SeqRecord(seq_rec)+'_libraryready'
 
         # initialize values
         uid_good, mutate_polyA = False, False
@@ -1159,7 +1274,7 @@ def add_fixed_seq_and_barcode(fasta, out_fasta=None, seq5=SEQ5, seq3=SEQ3,
         pad_lines.append(new_lines)
 
         # renumber mutations because of 5' additions from the desired sequence
-        mutations = _get_mutations_from_name(seq_rec.name)
+        mutations = _get_mutations_from_name(get_name_SeqRecord(seq_rec))
         mutations = [x+len(seq5)+pad5_length for x in mutations]
         muts.append(mutations)
 
@@ -1313,7 +1428,8 @@ def add_library_elements(fasta, out_fasta=None,
             min_length_stem=4, max_length_stem=12,
             num_pads_reduce=100, pad_to_length=None,
             barcode_file=None,
-            num_replicates=1):
+            num_replicates=1,
+            pad_polyAhang_other_side=0):
     '''
     From a fasta of sequences, add constant regions and barcodes
     Given a fasta of sequence pad all sequence to the same length
@@ -1414,7 +1530,7 @@ ence of different length are just truncated (all)
         desired_len = pad_to_length
     porp_reduce = (1-(percent_reduce_prob/100))
 
-    if barcode_file is not None and share_pad != 'none':
+    if barcode_file is not None and share_pad not in ['none','same_origin']:
         print("ERROR: if using sbatch, must have share_pad=none when specifying barcode_file.")
     if num_replicates > 1 and share_pad != 'none':
         print("ERROR: multiple pad+barcode replicates currently only implemented for share_pad='none'.")
@@ -1445,7 +1561,7 @@ ence of different length are just truncated (all)
             pad_length = desired_len-seq_length
             structs, regions = _get_5_3_split(pad_length, pad_hang, pad_polyAhang,
                                               min_length_stem, max_length_stem,
-                                              pad_side, pad_loop, seq_length, offset=len(seq5))
+                                              pad_side, pad_loop, seq_length, offset=len(seq5),add_3_3=pad_polyAhang_other_side)
 
             # barcode structural regions
             regions_barcode = [len(seq5), len(seq5)+desired_len,
@@ -1476,6 +1592,7 @@ ence of different length are just truncated (all)
             print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
             # for each sequence search for good_pad
             for seq in tqdm(list(seqs)):
+                mutate_polyA = False
                 for rep in range(num_replicates):
                     good_pad = False
                     # if tried enough relax the probability contstraints
@@ -1483,12 +1600,6 @@ ence of different length are just truncated (all)
                     seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
 
                     while not good_pad:
-                        for type_error, count in seq_count.items():
-                            mutiplier = (count // num_pads_reduce)
-                            prob_factor[type_error] = porp_reduce**mutiplier
-                            if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
-                                seq_count[type_error] += 1
-                                print(f'For {seq.name}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
                         # get random pad
 
                         pad5 = _get_random_barcode(num_bp=structs["5"]['bp'],
@@ -1498,7 +1609,8 @@ ence of different length are just truncated (all)
                         pad3 = _get_random_barcode(num_bp=structs["3"]['bp'],
                                                    num5hang=structs["3"]['hang_rand'],
                                                    polyA5=structs["3"]['hang_polyA'],
-                                                   loop=structs["3"]['loop'])
+                                                   loop=structs["3"]['loop'],
+                                                   polyA3=pad_polyAhang_other_side)
                         pad5 = _get_dna_from_SeqRecord(pad5)
                         pad3 = _get_dna_from_SeqRecord(pad3)
 
@@ -1507,16 +1619,36 @@ ence of different length are just truncated (all)
                         uid_good = False
                         # TODO random 20 barcode_count < 20 and
                         while not uid_good and barcode_count<20:
-                            # check barcode folds and barcode does not interact with sequence
+                            for type_error, count in seq_count.items():
+                                mutiplier = (count // num_pads_reduce)
+                                prob_factor[type_error] = porp_reduce**mutiplier
+                                if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
+                                    seq_count[type_error] += 1
+                                    print(f'For {get_name_SeqRecord(seq)}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
+                            if mutiplier >= 3 and not mutate_polyA:
+                                mutate_polyA = True
+                                if barcode_num5polyA != 0:
+                                    barcode_num5polyA -= 1
+                                    num5hang += 1
+                                if structs["3"]['hang_polyA'] != 0:
+                                    structs["3"]['hang_rand'] += structs["3"]['hang_polyA']
+                                    structs["3"]['hang_polyA'] = 0
+                                if structs["5"]['hang_polyA'] != 0:
+                                    structs["5"]['hang_rand'] += structs["5"]['hang_polyA']
+                                    structs["5"]['hang_polyA'] = 0
+                                    seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
+                                    #num_barcode = num_barcode_before_reduce*3
+                                print(f'{get_name_SeqRecord(seq)}, failed to find barcodes now allowing polyA to be random sequence.')
+                                # check barcode folds and barcode does not interact with sequence
 
                             # TODO need to check uniqueness!!! edit distance and other logic in original code
                             barcode = _get_dna_from_SeqRecord(all_uids[current_uid])
 
                             full_seq = seq5 + pad5 + _get_dna_from_SeqRecord(seq) + pad3 + barcode + seq3
                             if num_replicates == 1:
-                                full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}_libraryready'
+                                full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}_libraryready'
                             else:
-                                full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}_rep{rep}_libraryready'
+                                full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}_rep{rep}_libraryready'
                             # check if structure correct, save picture if specified and chance has it
                             if (save_image_folder is not None) and (random() < save_bpp_fig):
                                 save_image = f'{save_image_folder}/{full_seq_name}.png'
@@ -1582,6 +1714,20 @@ ence of different length are just truncated (all)
         lib = []
         pads_by_len = {}
         all_seqs_by_origin = {}
+        rejected_uids = []
+        if barcode_file is None:
+            print("Getting random pads for each sequence, not guaranteed to be unique.")
+
+            # get and randomly shuffle all potential barcodes
+            all_uids = get_all_barcodes(num_bp=barcode_num_bp, loop=barcode_loop, num5hang=barcode_num5hang,
+                                        polyA5=barcode_num5polyA,shuffle_barcodes=True)
+            if len(used_barcodes) != 0:
+                 if len(all_uids[0]) != len(used_barcodes[0]):
+                     print('ERROR: used barcodes are not the correct length')
+            
+        else:
+            all_uids = list(SeqIO.parse(barcode_file, "fasta"))
+        current_uid =0
         for len_group,seqs in seq_by_length.items():
             # get length of pad for this group, if 0 done
             length_to_add = desired_len-len_group
@@ -1590,7 +1736,7 @@ ence of different length are just truncated (all)
             # get groups by origin
             seqs_by_origin = {}
             for seq in seqs:
-                origin = _get_origin_seq_from_name(seq.name)
+                origin = get_origin_seq_from_name(seq.name)
                 if origin in seqs_by_origin:
                     seqs_by_origin[origin].append(seq)
                 else:
@@ -1600,14 +1746,13 @@ ence of different length are just truncated (all)
                 for origin in seqs_by_origin.keys():
                     pads_by_len[len_group][origin] = ['', '']
                 continue
-
             
 
             # split length of pad to either end of the sequence and get regions
             structs, regions = _get_5_3_split(length_to_add, pad_hang, pad_polyAhang,
                                               min_length_stem, max_length_stem,
-                                              pad_side, pad_loop, len_group,offset=len(seq5))
-
+                                              pad_side, pad_loop, len_group,offset=len(seq5),add_3_3=pad_polyAhang_other_side)
+            #print(structs)
             # barcode structural regions
             regions_barcode = [len(seq5), len(seq5)+desired_len,
                        len(seq5)+desired_len+barcode_num5hang+barcode_num5polyA+(2*barcode_num_bp)+len(barcode_loop)]
@@ -1632,12 +1777,12 @@ ence of different length are just truncated (all)
             regions['pairedA'] = [region_paired_A, regions['pairedA'], ]
             regions['pairedB'] = [region_paired_B, regions['pairedB']]
             regions['unpaired'] = region_unpaired + regions['unpaired']
-
+            #print(regions)
             print(f"Finding a {structs['5']['N']}nt 5' pad with {structs['5']['bp']}bp stem {structs['5']['hang_rand']}nt random hang {structs['5']['hang_polyA']}nt polyA hang.")
             print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
-            
+            #mutate_polyA = False
             for origin,seqs in seqs_by_origin.items():
-
+                mutate_polyA=False
                 print(f"Searching for pad for group len {len_group}, origin {origin}.")
                 #for seq in tqdm(seqs):
                 #    # TODO TODO
@@ -1647,16 +1792,18 @@ ence of different length are just truncated (all)
                 prob_factor = {}
                 seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
                 if not os.path.exists(f'{save_image_folder}/temp'):
-                    os.makedirs(f'{save_image_folder}temp')
+                    os.makedirs(f'{save_image_folder}/temp')
                 else:
-                    for f in glob(f'{save_image_folder}temp/*'):
+                    for f in glob(f'{save_image_folder}/temp/*'):
                         os.remove(f)
+                max_bad_structs = len(seqs)*0.25 # magic number TODO
+                num_pads_reduce =50 # TODO
                 # current_pad = 0
                 while not good_pad:
                     potential_lib = []
                     # if tried enough relax the probability contstraints
                     # TODO
-                    
+                    print('pad')
                     # get random pad
                     pad5 = _get_random_barcode(num_bp=structs["5"]['bp'],
                                                num3hang=structs["5"]['hang_rand'],
@@ -1665,13 +1812,14 @@ ence of different length are just truncated (all)
                     pad3 = _get_random_barcode(num_bp=structs["3"]['bp'],
                                                num5hang=structs["3"]['hang_rand'],
                                                polyA5=structs["3"]['hang_polyA'],
-                                               loop=structs["3"]['loop'])
+                                               loop=structs["3"]['loop'],
+                                               polyA3=pad_polyAhang_other_side)
 
                     # chek all samples sequences
                     bad_count = 0
                     for i, seq in enumerate(seqs): 
-                        #if i % 50 == 0 and i != 0:
-                        #    print(i)
+                        if i % 2 == 0 and i != 0:
+                            print(i)
                         
                         barcode_count = 0
                         uid_good = False
@@ -1683,16 +1831,43 @@ ence of different length are just truncated (all)
                                 if (count-mutiplier) % num_pads_reduce == 0 and count != 0:
                                     seq_count[type_error] += 1
                                     print(f'For {len_group}, failed to find pad from {count-mutiplier} pads because of {type_error}, reducing probabilities needed by a factor of {prob_factor[type_error]}.')
-                            # check barcode folds and barcode does not interact with sequence
-                            barcode = _get_random_barcode(num_bp=barcode_num_bp,
-                                                      loop=barcode_loop, 
-                                                      num5hang=barcode_num5hang,
-                                                      polyA5=barcode_num5polyA)
-                            full_seq = seq5 + pad5 + _get_dna_from_SeqRecord(seq) + pad3 + barcode + seq3
-                            full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}_libraryready'
 
+                            # when this is 3x, if there is a ployA allow this to mutate
+                            if mutiplier >= 3 and not mutate_polyA:
+                                mutate_polyA = True
+                                if barcode_num5polyA != 0:
+                                    barcode_num5polyA -= 1
+                                    num5hang += 1
+                                if structs["3"]['hang_polyA'] != 0:
+                                    structs["3"]['hang_rand'] += structs["3"]['hang_polyA']
+                                    structs["3"]['hang_polyA'] = 0
+                                if structs["5"]['hang_polyA'] != 0:
+                                    structs["5"]['hang_rand'] += structs["5"]['hang_polyA']
+                                    structs["5"]['hang_polyA'] = 0
+                                seq_count = {'unpaired': 0, 'paired': 0, 'interaction': 0}
+                                #num_barcode = num_barcode_before_reduce*3
+                                print(f'{get_name_SeqRecord(seq)}, failed to find barcodes now allowing polyA to be random sequence.')
+
+                            # check barcode folds and barcode does not interact with sequence
+                            #barcode = _get_random_barcode(num_bp=barcode_num_bp,
+                            #                          loop=barcode_loop, 
+                            #                          num5hang=barcode_num5hang,
+                            #                          polyA5=barcode_num5polyA)
+                            barcode = _get_dna_from_SeqRecord(all_uids[current_uid])
+                            if mutate_polyA:
+                                new_hang = _get_random_barcode(
+                                    num_bp=0, num5hang=barcode_num5polyA, loop='').seq
+                                # new_loop = _get_random_barcode(num_bp=0, num5hang=len(loop),loop='').seq
+                                # uid = new_hang+uid[num5polyA:num5polyA+num_bp]+new_loop+uid[num5polyA+num_bp+len(loop):]
+                                barcode = new_hang+barcode[barcode_num5polyA:]
+                            full_seq = seq5 + pad5 + _get_dna_from_SeqRecord(seq) + pad3 + barcode + seq3
+                            #print(full_seq.seq)
+                            full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}_libraryready'
+                            #print(pad5,'5')
+                            #print(pad3,'3')
+                            #print(full_seq.seq,print(regions))
                             # check if structure correct, save picture if specified and chance has it
-                            if (save_image_folder is not None) and (random() < save_bpp_fig):
+                            if False: #TDO (save_image_folder is not None) and (random() < save_bpp_fig):
                                 save_image = f'{save_image_folder}/temp/{full_seq_name}.png'
                                 plot_lines = None # TODO lines
 
@@ -1724,31 +1899,32 @@ ence of different length are just truncated (all)
                             # if barcode is good,
                             if not barcode_fail:
                                 uid_good = True
-                            
+                            current_uid += 1
                             good_pad = struct_results["pass"]
                             barcode_count += 1
-                        
+                            #if not good_pad:
+                            #    seq_count = _update_seq_count(seq_count,struct_results)
                             # check pad folds and pad does not interact with sequence or others
 
                             # if not good structure add to count
                             # stop if reached maximal bad
-                            if not good_pad and uid_good:
-                                seq_count = _update_seq_count(seq_count,struct_results)
                         if not good_pad:
                             bad_count += 1
-                            if bad_count >= max_bad_structs[len_group]:
+                            seq_count = _update_seq_count(seq_count,struct_results)
+                            if bad_count/(i+1) >= max_bad_structs/len(seqs):
                                 break
-                        else:
-                            # good so add to list
-                            full_seq = _get_dna_from_SeqRecord(full_seq)
-                            padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
+                        #else:
+                        #    # good so add to list
+                        full_seq = _get_dna_from_SeqRecord(full_seq)
+                        padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
                                                  full_seq_name, '', '')
-                            potential_lib.append(padded_seq)
+                        potential_lib.append(padded_seq)
+                    if len(potential_lib)==len(seqs):
+                        good_pad = True
 
-                # TODO this may have to be parralized? across groups --> same_pad seperatesequences
                 lib.extend(potential_lib)
-                for f in glob(f'{save_image_folder}/temp/*'):
-                    os.system(f"mv {f} {'/'.join(f.split('/')[:-2]+f.split('/')[-1:])}")
+                #for f in glob(f'{save_image_folder}/temp/*'):
+                os.system(f"mv {save_image_folder}/temp/* ../")#{'/'.join(f.split('/')[:-2]+f.split('/')[-1:])}")
         # save
         SeqIO.write(lib, out_fasta, "fasta")
         print(f'Saved all padded sequences to {out_fasta}.')
@@ -1808,7 +1984,7 @@ ence of different length are just truncated (all)
             # split length of pad to either end of the sequence and get regions
             structs, regions = _get_5_3_split(length_to_add, pad_hang, pad_polyAhang,
                                               min_length_stem, max_length_stem,
-                                              pad_side, pad_loop, len_group,offset=len(seq5))
+                                              pad_side, pad_loop, len_group,offset=len(seq5),add_3_3=pad_polyAhang_other_side)
 
             # barcode structural regions
             regions_barcode = [len(seq5), len(seq5)+desired_len,
@@ -1856,7 +2032,8 @@ ence of different length are just truncated (all)
                 pad3 = _get_random_barcode(num_bp=structs["3"]['bp'],
                                            num5hang=structs["3"]['hang_rand'],
                                            polyA5=structs["3"]['hang_polyA'],
-                                           loop=structs["3"]['loop'])
+                                           loop=structs["3"]['loop'],
+                                           polyA3=pad_polyAhang_other_side)
 
                 # chek all samples sequences
                 bad_count = 0
@@ -1930,7 +2107,7 @@ ence of different length are just truncated (all)
             pad5, pad3 = pads_by_len[seq_length]
             for seq in list(seqs):
                 full_seq = pad5+_get_dna_from_SeqRecord(seq)+pad3
-                full_seq_name = f'{seq.name}_{len(pad5)}pad{len(pad3)}'
+                full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}'
                 padded_seq = SeqIO.SeqRecord(Seq.Seq(full_seq),
                                              full_seq_name, '', '')
                 padded_seqs.append(padded_seq)
@@ -2173,10 +2350,9 @@ def plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image
         plt.vlines(line-0.5, y1+1, y2-1, color=line_color, linewidth=linewidth)
     for i, line in enumerate(pad_lines):
         if line != []:
-            plt.vlines(line[0]-0.5, i+0.5, i-0.5,
-                       color=pad_line_color, linewidth=linewidth)
-            plt.vlines(line[1]-0.5, i+0.5, i-0.5,
-                       color=pad_line_color, linewidth=linewidth)
+            for l in line:
+                plt.vlines(l-0.5, i+0.5, i-0.5,
+                           color=pad_line_color, linewidth=linewidth)
 
     # formatting
     ax.spines['top'].set_visible(False)
@@ -2199,7 +2375,7 @@ def plot_all_bpp_from_fasta(fasta, save_image_folder):
     for seq_rec in tqdm(seqs):
         seq = _get_dna_from_SeqRecord(seq_rec)
         bpp = bpps(seq, package='eternafold')
-        save_image = f'{save_image_folder}/{seq_rec.name}.png'
+        save_image = f'{save_image_folder}/{get_name_SeqRecord(seq_rec)}.png'
         plot_bpp(bpp, seq, save_image)
 
 
@@ -2227,10 +2403,10 @@ def _remove_seqs_in_other_list(seqsA, seqsB):
     DOES NOT check seq itself!
     '''
 
-    names = [n.name for n in seqsB]
+    names = [get_name_SeqRecord(n) for n in seqsB]
     good_seqs = []
     for seq_rec in seqsA:
-        if seq_rec.name not in names:
+        if get_name_SeqRecord(seq_rec) not in names:
             good_seqs.append(seq_rec)
     return good_seqs
 
@@ -2312,15 +2488,31 @@ def _get_mutations_from_name(name):
     nucs = []
     for name_part in name.split('_'):
         if len(name_part) > 2:
-            if name_part[-2] == '-':
-                nucnum_A, nuc_B = name_part.split('-')
-                num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
-                if nuc_A in BASES and nuc_B in BASES:
-                    nucs.append(int(num))
+            if '-' in name_part:
+                subparts = name_part.split('-')
+                if len(subparts)==2:
+                    nucnum_A, nuc_B = name_part.split('-')
+                    num, nuc_A = nucnum_A[:-1], nucnum_A[-1]
+                    if nuc_A in BASES and nuc_B in BASES:
+                        nucs.append(int(num))
     return nucs
 
 
-def _get_origin_seq_from_name(name):
+def _get_pad_length_from_name(name):
+    '''
+    using the naming convention _#N-N_ where # is nucleotide number
+    N are the nucleotides native and mutant, find these and return the number
+    '''
+
+    nucs = []
+    for name_part in name.split('_'):
+        if 'pad' in name_part:
+            pad5, pad3 = name_part.split('pad')
+            return int(pad5),int(pad3)
+    return 0,0
+
+
+def get_origin_seq_from_name(name):
     '''
     using the naming convention where the original sequence name
     is followed by names added by this code (eg _#N-N_ for mutant,
@@ -2330,7 +2522,7 @@ def _get_origin_seq_from_name(name):
     '''
 
     origin_name = []
-    name_parts = name.split('_')
+    name_parts = '_'.join(name.split()).split('_')
     reach_library_part = False
     while not reach_library_part and len(name_parts)>0:
         next_part = name_parts.pop(0)
@@ -2354,7 +2546,7 @@ def _get_origin_seq_from_name(name):
     return '_'.join(origin_name)
 
 
-def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pad_side, loop, seq_len,offset=0):
+def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pad_side, loop, seq_len,offset=0,add_3_3=0):
 
     # initialize variables
     loop_len = len(loop)
@@ -2377,7 +2569,7 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
 
         # assign to correct side
         if pad_side == "3'":
-            structs["3"]['N'] = length
+            structs["3"]['N'] = (length)-add_3_3
             structs["3"]['bp'] = num_bp
         elif pad_side == "5'":
             structs["5"]['N'] = length
@@ -2388,30 +2580,30 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
         # if too short for 1 stem, split into 2 unstructured regions
         if length < min_pad_for_stem:
             structs["5"]['N'] = length//2
-            structs["3"]['N'] = length//2
+            structs["3"]['N'] = (length//2)-add_3_3
             if length % 2 != 0:
                 structs["3"]['N'] += 1
 
         # if enough for 1 stem but not too much for 1 stem, make just 1 stem
         elif length < max_pad_for_stem:
-            structs["3"]['N'] = length
+            structs["3"]['N'] = length -add_3_3
             structs["3"]['bp'] = (length-unpaired_length)//2
 
         # if too much for 1 stem but not enough for 2 stems, make 1 stem as long as possible
         elif length < 2*min_pad_for_stem:
             structs["5"]['N'] = length-max_pad_for_stem
-            structs["3"]['N'] = max_pad_for_stem
+            structs["3"]['N'] = max_pad_for_stem-add_3_3
             structs["3"]['bp'] = max_length_stem
 
         # if enough for 2 stems, make 2
         else:
             structs["5"]['N'] = length//2
-            structs["3"]['N'] = length//2
+            structs["3"]['N'] = (length//2)-add_3_3
             if length % 2 != 0:
-                structs["3'"]['N'] += 1
+                structs["3"]['N'] += 1
             structs["5"]['bp'] = (structs["5"]['N']-unpaired_length)//2
             structs["3"]['bp'] = (structs["3"]['N']-unpaired_length)//2
-            if (num_bp5 > max_length_stem) or (num_bp3 > max_length_stem):
+            if (structs["5"]['bp'] > max_length_stem) or (structs["3"]['bp'] > max_length_stem):
                 print("WARNING: stem too long, fix not implemented.")
     else:
         print("ERROR: pad_side not recognized.")
@@ -2424,12 +2616,14 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
             struct['hang_polyA'] = 0
             struct['hang_rand'] = 0
         elif struct['N'] != (struct['bp']*2)+struct['hang_polyA']+struct['hang_rand']+len(struct['loop']):
-            if struct['hang_rand'] == 0 and struct['hang_polyA'] != 0:
-                struct['hang_polyA'] = struct['N'] - \
-                    ((struct['bp']*2)+len(struct['loop']))
-            else:
-                struct['hang_rand'] = struct['N'] - \
+            #if struct['hang_polyA']#struct['hang_rand'] == 0 and struct['hang_polyA'] != 0:
+            #    struct['hang_polyA'] = struct['N'] - \
+            #        ((struct['bp']*2)+len(struct['loop']))
+            #else:
+            struct['hang_rand'] = struct['N'] - \
                     ((struct['bp']*2)+struct['hang_polyA']+len(struct['loop']))
+
+    
 
     # get parts that should and shouldn't be paired
     regions = {}
@@ -2451,23 +2645,37 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
     regions['pairedB'] = list(range(sum(parts[:3]),
                                     sum(parts[:4])))[::-1]
     # 5' pad and 3' pad do not interact with sequence
-    regions['noninteractA'] = [list(range(sum(parts[:1]),
-                                         sum(parts[:5]))),
-                               list(range(sum(parts[:6]),
-                                              sum(parts[:10])))]
-    regions['noninteractB'] = [list(range(sum(parts[:5]),
-                                         sum(parts[:10]))),
-                            list(range(sum(parts[:1]),
-                                         sum(parts[:6])))]
+    if add_3_3 != 0:
+        structs["3"]['N'] += add_3_3
+        regions['unpaired'].append(list(range(sum(parts[:10]),sum(parts[:10])+add_3_3)))
+        regions['noninteractA'] = [list(range(sum(parts[:1]),
+                                             sum(parts[:5]))),
+                                   list(range(sum(parts[:6]),
+                                                  sum(parts[:10])+add_3_3))]
+        regions['noninteractB'] = [list(range(sum(parts[:5]),
+                                             sum(parts[:10])+add_3_3)),
+                                list(range(sum(parts[:1]),
+                                             sum(parts[:6])))]
+    else:
+        regions['noninteractA'] = [list(range(sum(parts[:1]),
+                                             sum(parts[:5]))),
+                                   list(range(sum(parts[:6]),
+                                                  sum(parts[:10])))]
+        regions['noninteractB'] = [list(range(sum(parts[:5]),
+                                             sum(parts[:10]))),
+                                list(range(sum(parts[:1]),
+                                             sum(parts[:6])))]
     regions['pairedA'].extend(list(range(sum(parts[:7]),
                                          sum(parts[:8]))))
     regions['pairedB'].extend(list(range(sum(parts[:9]),
                                          sum(parts[:10])))[::-1])
+    
 
     return structs, regions
 
 
 def _get_pad_from_name(name):
+
     name.split('pad')
     pad5_length = int(name.split('pad')[0].split("_")[-1])
     pad3_length = int(name.split('pad')[1].split("_")[0])
@@ -2569,28 +2777,44 @@ def get_regions_for_doublemut(doublemuts):
 ###############################################################################
 
 
-def plot_punpaired_from_fasta(fasta, save_image):
+def plot_punpaired_from_fasta(fasta, save_image,lenbarcode,len5=len(SEQ5),len3=len(SEQ3),max_per=500,startN=0,just_one=False):
     # NOT well tested
     seqs = list(SeqIO.parse(fasta, "fasta"))
-    p_unpaireds = {}
-    seqs_list = []
-    muts = []
-    for seq_rec in seqs:
-        seq = str(seq_rec.seq).upper().replace("T", "U")
-        bpp = bpps(seq,
-                   package='eternafold')
-        p_unpaired = 1-bpp.sum(axis=0)
-        p_unpaireds[seq_rec.name] = p_unpaired
-        seqs_list.append(seq)
-        muts.append([5, 15])
-    labels = []
-    for i in range(len(seqs[0])):
-        if i % 10 == 0:
-            labels.append(i)
-        else:
-            labels.append('')
+    if just_one:
+        endN = startN+1
+    else:
+        endN = 1+(len(seqs)//max_per)
+    for N in range(startN,endN):
+        if not os.path.isfile(f'{save_image}_{N}.png'):
 
-    plot_punpaired(p_unpaireds, labels, seqs, muts, [], [], save_image)
+            print("Working on image",N)
+            p_unpaireds = {}
+            seqs_list = []
+            muts = []
+            pad_lines = []
+            for seq_rec in seqs[N*max_per:min(len(seqs),(N+1)*max_per)]:
+                seq = str(seq_rec.seq).upper().replace("T", "U")
+                bpp = bpps(seq,
+                           package='eternafold')
+                p_unpaired = 1-bpp.sum(axis=0)
+                p_unpaireds[get_name_SeqRecord(seq_rec)] = p_unpaired
+                seqs_list.append(seq)
+                # TODO bug in reading pads need to check it can be int iffed, otherwise not padd name
+                pad5,pad3 = _get_pad_length_from_name(get_name_SeqRecord(seq_rec))
+                pad5 += len5
+                pad3 = len(seq) - pad3 - len3 - lenbarcode
+                barcode = len(seq) - len3 - lenbarcode
+                pad_lines.append([len5,pad5,pad3,barcode,len(seq)-len3])
+                mutations = _get_mutations_from_name(get_name_SeqRecord(seq_rec))
+                mutations = [x+pad5 for x in mutations]
+                muts.append(mutations)
+            labels = []
+            for i in range(len(seqs[0])):
+                if i % 10 == 0:
+                    labels.append(i)
+                else:
+                    labels.append('')
+            plot_punpaired(p_unpaireds, labels, seqs[N*max_per:min(len(seqs),(N+1)*max_per)], muts, [], pad_lines, f'{save_image}_{N}.png')
 
 #add_library_elements('examples/m2seq_ex_output/example_single_mut.fasta', out_fasta='test.fasta',share_pad='none',save_image_folder='test',save_bpp_fig=1)
 
