@@ -89,6 +89,8 @@ library.add_argument('--barcode_stem_gu_present', action='store_true',
                      help='IF the list of used barcodes is a simple stem, but has GU pairs, this will check both side of the stem.')
 library.add_argument('--pad_polyAhang_other_side',type=int,default=0,
                       help='Number nucleotides (only +1 possible) to have a polyA, single-stranded hang between sequence and library element on 3end.'  )
+library.add_argument('--sbatch_start_i',type=int,default=0)
+
 window = parser.add_argument_group('window')
 window.add_argument('--length', type=int, default=100,
                     help='Length of each window to create.')
@@ -135,8 +137,8 @@ if args.check_library:
     barcodes = get_used_barcodes(args.input_fasta, args.avoid_barcodes_start, args.avoid_barcodes_end, args.barcode_stem_gu_present, args.barcode_numbp)
     print('Confirm these are barcodes, otherwise change --avoid_barcodes_start and --avoid_barcodes_end',sample(barcodes,5))
     names = [s.name for s in parse_input_sequences(args.input_fasta)]
-    print(parse_input_sequences(args.input_fasta)[0])
-    print(names)
+    #print(parse_input_sequences(args.input_fasta)[0])
+    #print(names)
     if get_same_length(args.input_fasta)[0]:
         print("All sequences are of the same length.")
     else:
@@ -294,8 +296,8 @@ elif args.just_library_sbatch:
     if args.share_pad == 'none':
         ### num para
         print("Splitting barcodes and sequences.")
-        split_fasta_file(args.input_fasta,args.sbatch_processes,f'{args.output_prefix}_sbatch_results','seqs.fasta')
-        for i in range(args.sbatch_processes):
+        split_fasta_file(args.input_fasta,args.sbatch_processes,f'{args.output_prefix}_sbatch_results','seqs.fasta',args.sbatch_start_i)
+        for i in range(args.sbatch_start_i,args.sbatch_start_i+args.sbatch_processes):
             copy(f'{args.barcode_file}/{i}_all_unused_barcodes_new.fasta', f'{args.output_prefix}_sbatch_results/{i}/barcodes.fasta')
         # TODO split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',args.sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
         sbatch_processes = args.sbatch_processes
@@ -321,7 +323,7 @@ elif args.just_library_sbatch:
     else:
         print('ERROR sbatch parralelization only implented for no sharing of pad of share fromm origin source.')
 
-    for i in range(1,sbatch_processes):
+    for i in range(1+args.sbatch_start_i,args.sbatch_start_i+sbatch_processes):
             
         command = f'python -m big_library_design --just_library -i seqs.fasta -o out --barcode_file barcodes.fasta '
         command += f'--share_pad {args.share_pad} --seq5 {args.seq5} --seq3 {args.seq3} --barcode_numbp {args.barcode_numbp} '
@@ -341,7 +343,7 @@ elif args.just_library_sbatch:
         os.system(f'sbatch run.sbatch')
         os.chdir(base_dir)
 
-    i = 0
+    i = args.sbatch_start_i
     command = f'python -m big_library_design --just_library -i seqs.fasta -o out --barcode_file barcodes.fasta '
     command += f'--share_pad {args.share_pad} --seq5 {args.seq5} --seq3 {args.seq3} --barcode_numbp {args.barcode_numbp} '
     command += f'--barcode_num5randomhang {args.barcode_num5randomhang} --barcode_num5polyA {args.barcode_num5polyA} '
@@ -365,7 +367,7 @@ elif args.just_library_sbatch:
         num_done = len(glob(f'{args.output_prefix}_sbatch_results/*/out_library.fasta'))
     # combine
     combine_fastas(glob(f'{args.output_prefix}_sbatch_results/*/out_library.fasta'),f'{args.output_prefix}_library.fasta')
-    for i in range(sbatch_processes):
+    for i in range(args.sbatch_start_i,args.sbatch_start_i+sbatch_processes):
         barcodes = get_used_barcodes(f'{args.output_prefix}_sbatch_results/{i}/out_library.fasta', args.avoid_barcodes_start, args.avoid_barcodes_end, False, args.barcode_numbp)
         delete_used_barcodes(f'{args.output_prefix}_sbatch_results/{i}/barcodes.fasta',barcodes,f'{args.output_prefix}_sbatch_results/{i}/barcodes_left.fasta')
     combine_fastas(glob(f'{args.output_prefix}_sbatch_results/*/barcodes_left.fasta'),f'{args.output_prefix}_all_barcodes_left.fasta')

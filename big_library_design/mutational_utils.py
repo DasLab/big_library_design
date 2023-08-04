@@ -203,16 +203,16 @@ def check_sequences_contents(fasta,seq5=SEQ5, seq3=SEQ3,bases=BASES,content_only
     for seq_rec in seqs:
         seq = _get_dna_from_SeqRecord(seq_rec)
         if not content_only:
-            if seq in sequences:
-                problems.append(f"{get_name_SeqRecord(seq_rec)} is a repeated sequence.")
-            if get_name_SeqRecord(seq_rec)in names:
-                problems.append(f"{get_name_SeqRecord(seq_rec)} is a repeated name+description.")
+            #if seq in sequences:
+            #    problems.append(f"{get_name_SeqRecord(seq_rec)} is a repeated sequence.")
+            #if get_name_SeqRecord(seq_rec)in names:
+            #    problems.append(f"{get_name_SeqRecord(seq_rec)} is a repeated name+description.")
             if seq[:len(seq5)] != seq5:
                 problems.append(f"{get_name_SeqRecord(seq_rec)} has incorrect 5' sequence.")
             if seq[-len(seq3):] != seq3:
                 problems.append(f"{get_name_SeqRecord(seq_rec)} has incorrect 3' sequence.")
-            sequences.append(seq)
-            names.append(get_name_SeqRecord(seq_rec))
+            #sequences.append(seq)
+            #names.append(get_name_SeqRecord(seq_rec))
         for n in seq:
             if n not in bases:
                 problems.append(f"{get_name_SeqRecord(seq_rec)} has non {bases} base.")
@@ -820,7 +820,7 @@ def add_pad(fasta, out_fasta, bases=BASES, share_pad='same_length',
             epsilon_avg_paired=MINAVGPROB_PAIRED,
             loop=TETRALOOP, hang=3, polyAhang=0, min_num_samples=30,
             max_prop_bad=0.05, pad_side='both',
-            min_length_stem=4, max_length_stem=12,
+            min_length_stem=6, max_length_stem=16,
             num_pads_reduce=100, percent_reduce_prob=10,pad_to_length=None):
     '''
     Given a fasta of sequence pad all sequence to the same length
@@ -1425,7 +1425,7 @@ def add_library_elements(fasta, out_fasta=None,
                               percent_reduce_prob=10, min_edit=2,
                               pad_loop=TETRALOOP, pad_hang=0, pad_polyAhang=3, pad_min_num_samples=30,
             pad_max_prop_bad=0.05, pad_side='both',
-            min_length_stem=4, max_length_stem=12,
+            min_length_stem=6, max_length_stem=16,
             num_pads_reduce=100, pad_to_length=None,
             barcode_file=None,
             num_replicates=1,
@@ -1562,7 +1562,10 @@ ence of different length are just truncated (all)
             structs, regions = _get_5_3_split(pad_length, pad_hang, pad_polyAhang,
                                               min_length_stem, max_length_stem,
                                               pad_side, pad_loop, seq_length, offset=len(seq5),add_3_3=pad_polyAhang_other_side)
-
+            if structs['3']['N']<pad_polyAhang_other_side:
+                pad_polyAhang_other_side=structs['3']['N']
+                #print(structs)
+                #print(regions)
             # barcode structural regions
             regions_barcode = [len(seq5), len(seq5)+desired_len,
                        len(seq5)+desired_len+barcode_num5hang+barcode_num5polyA+(2*barcode_num_bp)+len(barcode_loop)]
@@ -1590,6 +1593,7 @@ ence of different length are just truncated (all)
             print(f"Searching for pad for group len {pad_length}.")
             print(f"Finding a {structs['5']['N']}nt 5' pad with {structs['5']['bp']}bp stem {structs['5']['hang_rand']}nt random hang {structs['5']['hang_polyA']}nt polyA hang.")
             print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
+            #print(regions)
             # for each sequence search for good_pad
             for seq in tqdm(list(seqs)):
                 mutate_polyA = False
@@ -1601,7 +1605,7 @@ ence of different length are just truncated (all)
 
                     while not good_pad:
                         # get random pad
-
+                        #print('pad')
                         pad5 = _get_random_barcode(num_bp=structs["5"]['bp'],
                                                    num3hang=structs["5"]['hang_rand'],
                                                    polyA3=structs["5"]['hang_polyA'],
@@ -1613,10 +1617,11 @@ ence of different length are just truncated (all)
                                                    polyA3=pad_polyAhang_other_side)
                         pad5 = _get_dna_from_SeqRecord(pad5)
                         pad3 = _get_dna_from_SeqRecord(pad3)
-
+                        #print(pad3,pad5)
 
                         barcode_count = 0
                         uid_good = False
+                        num_pads_reduce = 3
                         # TODO random 20 barcode_count < 20 and
                         while not uid_good and barcode_count<20:
                             for type_error, count in seq_count.items():
@@ -1650,11 +1655,14 @@ ence of different length are just truncated (all)
                             else:
                                 full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}_rep{rep}_libraryready'
                             # check if structure correct, save picture if specified and chance has it
-                            if (save_image_folder is not None) and (random() < save_bpp_fig):
+                            if False:#TODO(save_image_folder is not None) and (random() < save_bpp_fig):
                                 save_image = f'{save_image_folder}/{full_seq_name}.png'
                                 plot_lines = None # TODO lines
                             else:
                                 save_image, plot_lines = None, None
+
+                            #print(full_seq)
+                            #print(pad3)
                             struct_results = check_struct_bpp(full_seq, regions['unpaired'], 
                                                               regions['pairedA'], regions['pairedB'], 
                                                               regions['noninteractA'], regions['noninteractB'],
@@ -1685,17 +1693,23 @@ ence of different length are just truncated (all)
 
                             
                             good_pad = struct_results["pass"]
-                            if not good_pad:
-                                seq_count = _update_seq_count(seq_count,struct_results)
+                            
                             current_uid += 1
                             barcode_count += 1
                             # if looped through all barcodes, go back to previously rejected barcodes and continue loop
                             if current_uid == len(all_uids):
                                 all_uids = rejected_uids
                                 current_uid, rejected_uids = 0, []
+                        if not good_pad:
+                            seq_count = _update_seq_count(seq_count,struct_results)
 
-                        # TODO punpaired
+                            #if not good_pad:
+                            #    seq_count = _update_seq_count(seq_count,struct_results)
+                            # check pad folds and pad does not interact with sequence or others
 
+                            # if not good structure add to count
+                            # stop if reached maximal bad
+                            
                         # if its non interact 2 then its barcode needs revamped, otherwise pad                    
                         
                         # get full sequence and check structure
@@ -2546,7 +2560,7 @@ def get_origin_seq_from_name(name):
     return '_'.join(origin_name)
 
 
-def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pad_side, loop, seq_len,offset=0,add_3_3=0):
+def XXget_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pad_side, loop, seq_len,offset=0,add_3_3=0):
 
     # initialize variables
     loop_len = len(loop)
@@ -2556,7 +2570,7 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
                "3": initial_structure.copy()}
     min_pad_for_stem = min_length_stem*2 + loop_len + hang + polyAhang
     max_pad_for_stem = max_length_stem*2 + loop_len + hang + polyAhang
-    unpaired_length = loop_len+hang+polyAhang
+    unpaired_length = loop_len+hang+polyAhang+add_3_3
     # if only pad one side
     if pad_side == "3'" or pad_side == "5'":
         # make a helix if long enough
@@ -2646,7 +2660,7 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
                                     sum(parts[:4])))[::-1]
     # 5' pad and 3' pad do not interact with sequence
     if add_3_3 != 0:
-        structs["3"]['N'] += add_3_3
+        #structs["3"]['N'] += add_3_3
         regions['unpaired'].append(list(range(sum(parts[:10]),sum(parts[:10])+add_3_3)))
         regions['noninteractA'] = [list(range(sum(parts[:1]),
                                              sum(parts[:5]))),
@@ -2654,6 +2668,135 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
                                                   sum(parts[:10])+add_3_3))]
         regions['noninteractB'] = [list(range(sum(parts[:5]),
                                              sum(parts[:10])+add_3_3)),
+                                list(range(sum(parts[:1]),
+                                             sum(parts[:6])))]
+    else:
+        regions['noninteractA'] = [list(range(sum(parts[:1]),
+                                             sum(parts[:5]))),
+                                   list(range(sum(parts[:6]),
+                                                  sum(parts[:10])))]
+        regions['noninteractB'] = [list(range(sum(parts[:5]),
+                                             sum(parts[:10]))),
+                                list(range(sum(parts[:1]),
+                                             sum(parts[:6])))]
+    regions['pairedA'].extend(list(range(sum(parts[:7]),
+                                         sum(parts[:8]))))
+    regions['pairedB'].extend(list(range(sum(parts[:9]),
+                                         sum(parts[:10])))[::-1])
+    
+
+    return structs, regions
+
+
+def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pad_side, loop, seq_len,offset=0,add_3_3=0):
+
+    # initialize variables
+    loop_len = len(loop)
+    initial_structure = {"N": 0, 'bp': 0, 'hang_rand': hang,
+                         'hang_polyA': polyAhang, 'loop': loop}
+    structs = {"5": initial_structure.copy(),
+               "3": initial_structure.copy()}
+    min_pad_for_stem = min_length_stem*2 + loop_len + hang + polyAhang
+    max_pad_for_stem = max_length_stem*2 + loop_len + hang + polyAhang
+    unpaired_length = loop_len+hang+polyAhang+add_3_3
+    # if only pad one side
+    if pad_side == "3'" or pad_side == "5'":
+        # make a helix if long enough
+        if length -add_3_3>= min_pad_for_stem:
+            num_bp = (length-unpaired_length)//2
+            if num_bp > max_length_stem:
+                print("WARNING: stem too long, fix not implemented.")
+        else:
+            num_bp = 0
+
+        # assign to correct side
+        if pad_side == "3'":
+            structs["3"]['N'] = (length)-add_3_3
+            structs["3"]['bp'] = num_bp
+        elif pad_side == "5'":
+            structs["5"]['N'] = length
+            structs["5"]['bp'] = num_bp
+
+    # if pad both, make the split
+    elif pad_side == 'both':
+        # if too short for 1 stem, split into 2 unstructured regions
+        if length-add_3_3 < min_pad_for_stem:
+            structs["5"]['N'] = length//2
+            structs["3"]['N'] = (length//2)-add_3_3
+            if length % 2 != 0:
+                structs["3"]['N'] += 1
+
+        # if enough for 1 stem but not too much for 2 stema, make just 1 stem
+        elif length-add_3_3 < max_pad_for_stem:
+            structs["3"]['N'] = length -add_3_3
+            structs["3"]['bp'] = (length-unpaired_length)//2
+
+        # if too much for 1 stem but not enough for 2 stems, make 1 stem as long as possible
+        elif length -add_3_3< 2*min_pad_for_stem:
+            structs["5"]['N'] = length-max_pad_for_stem
+            structs["3"]['N'] = max_pad_for_stem-add_3_3
+            structs["3"]['bp'] = max_length_stem
+
+        # if enough for 2 stems, make 2
+        else:
+            structs["5"]['N'] = length//2
+            structs["3"]['N'] = (length//2)-add_3_3
+            if length % 2 != 0:
+                structs["3"]['N'] += 1
+            structs["5"]['bp'] = (structs["5"]['N']-unpaired_length)//2
+            structs["3"]['bp'] = (structs["3"]['N']-unpaired_length)//2
+            if (structs["5"]['bp'] > max_length_stem) or (structs["3"]['bp'] > max_length_stem):
+                print("WARNING: stem too long, fix not implemented.")
+    else:
+        print("ERROR: pad_side not recognized.")
+
+    # get hang and loop lengths
+    for side, struct in structs.items():
+        if struct['bp'] == 0:
+            struct['loop'] = ''
+        if struct['N'] <= 0:
+            struct['hang_polyA'] = 0
+            struct['hang_rand'] = 0
+        elif struct['N'] != (struct['bp']*2)+struct['hang_polyA']+struct['hang_rand']+len(struct['loop']):
+            if struct['hang_rand'] == 0 and struct['hang_polyA'] != 0:
+                struct['hang_polyA'] = struct['N'] - \
+                    ((struct['bp']*2)+len(struct['loop']))
+            else:
+                struct['hang_rand'] = struct['N'] - \
+                    ((struct['bp']*2)+struct['hang_polyA']+len(struct['loop']))
+    
+
+    # get parts that should and shouldn't be paired
+    regions = {}
+    parts = [offset,structs["5"]['bp'], len(structs["5"]['loop']), structs["5"]['bp'],
+             structs["5"]['hang_polyA'] + structs["5"]['hang_rand'],
+             seq_len, structs["3"]['hang_polyA'] + structs["3"]['hang_rand'],
+             structs["3"]['bp'], len(structs["3"]['loop']), structs["3"]['bp']]
+
+    regions['unpaired'] = [list(range(sum(parts[:2]),
+                                      sum(parts[:3]))),
+                           list(range(sum(parts[:4]),
+                                      sum(parts[:5]))),
+                           list(range(sum(parts[:6]),
+                                      sum(parts[:7]))),
+                           list(range(sum(parts[:8]),
+                                      sum(parts[:9])))]
+    regions['pairedA'] = list(range(sum(parts[:1]),
+                                    sum(parts[:2])))
+    regions['pairedB'] = list(range(sum(parts[:3]),
+                                    sum(parts[:4])))[::-1]
+    # 5' pad and 3' pad do not interact with sequence
+    if add_3_3 != 0:
+        print("FD")
+        structs["3"]['N'] += add_3_3
+        to_Add = min(add_3_3,structs["3"]['N'] )
+        regions['unpaired'].append(list(range(sum(parts[:10]),sum(parts[:10])+to_Add)))
+        regions['noninteractA'] = [list(range(sum(parts[:1]),
+                                             sum(parts[:5]))),
+                                   list(range(sum(parts[:6]),
+                                                  sum(parts[:10])+to_Add))]
+        regions['noninteractB'] = [list(range(sum(parts[:5]),
+                                             sum(parts[:10])+to_Add)),
                                 list(range(sum(parts[:1]),
                                              sum(parts[:6])))]
     else:
@@ -2777,7 +2920,7 @@ def get_regions_for_doublemut(doublemuts):
 ###############################################################################
 
 
-def plot_punpaired_from_fasta(fasta, save_image,lenbarcode,len5=len(SEQ5),len3=len(SEQ3),max_per=500,startN=0,just_one=False):
+def plot_punpaired_from_fasta(fasta, save_image,lenbarcode,len5=len(SEQ5),len3=len(SEQ3),max_per=500,startN=0,just_one=False,plot_lines_from_name=True):
     # NOT well tested
     seqs = list(SeqIO.parse(fasta, "fasta"))
     if just_one:
@@ -2800,14 +2943,15 @@ def plot_punpaired_from_fasta(fasta, save_image,lenbarcode,len5=len(SEQ5),len3=l
                 p_unpaireds[get_name_SeqRecord(seq_rec)] = p_unpaired
                 seqs_list.append(seq)
                 # TODO bug in reading pads need to check it can be int iffed, otherwise not padd name
-                pad5,pad3 = _get_pad_length_from_name(get_name_SeqRecord(seq_rec))
-                pad5 += len5
-                pad3 = len(seq) - pad3 - len3 - lenbarcode
-                barcode = len(seq) - len3 - lenbarcode
-                pad_lines.append([len5,pad5,pad3,barcode,len(seq)-len3])
-                mutations = _get_mutations_from_name(get_name_SeqRecord(seq_rec))
-                mutations = [x+pad5 for x in mutations]
-                muts.append(mutations)
+                if plot_lines_from_name:
+                    pad5,pad3 = _get_pad_length_from_name(get_name_SeqRecord(seq_rec))
+                    pad5 += len5
+                    pad3 = len(seq) - pad3 - len3 - lenbarcode
+                    barcode = len(seq) - len3 - lenbarcode
+                    pad_lines.append([len5,pad5,pad3,barcode,len(seq)-len3])
+                    mutations = _get_mutations_from_name(get_name_SeqRecord(seq_rec))
+                    mutations = [x+pad5 for x in mutations]
+                    muts.append(mutations)
             labels = []
             for i in range(len(seqs[0])):
                 if i % 10 == 0:
