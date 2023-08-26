@@ -157,7 +157,7 @@ if args.check_library:
         if not all_good:
             print("ERROR, not all stem unqiue, printing duplicates")
             found_barcodes, found_barcodes_full = [],[]
-            for i,(short_barcode,barcode) in enumerate(zip(bp_barcodes,barcodes)):
+            for i,(short_barcode,barcode) in tqdm(enumerate(zip(bp_barcodes,barcodes))):
                 if short_barcode in found_barcodes:
                     print(barcode,names[i])
                     ind = int(found_barcodes.index(short_barcode)/2)
@@ -268,6 +268,7 @@ elif args.just_library:
 
 elif args.just_library_sbatch:
     base_dir = os.getcwd()
+    
     if args.barcode_file is None:
         print("generating barcode")
         used_barcodes = []
@@ -289,17 +290,18 @@ elif args.just_library_sbatch:
         #TODO barcodes = SeqIO.parse(args.barcode_file)
         # need barcode folder option... and has to do this after knowing numberjobs?
         
-
     if not os.path.isdir(f'{args.output_prefix}_sbatch_results'):
         os.mkdir(f'{args.output_prefix}_sbatch_results')
-
+    
     if args.share_pad == 'none':
         ### num para
         print("Splitting barcodes and sequences.")
         split_fasta_file(args.input_fasta,args.sbatch_processes,f'{args.output_prefix}_sbatch_results','seqs.fasta',args.sbatch_start_i)
-        for i in range(args.sbatch_start_i,args.sbatch_start_i+args.sbatch_processes):
-            copy(f'{args.barcode_file}/{i}_all_unused_barcodes_new.fasta', f'{args.output_prefix}_sbatch_results/{i}/barcodes.fasta')
-        # TODO split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',args.sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
+        if args.barcode_file is None:
+            split_fasta_file(f'{args.output_prefix}_all_unused_barcodes.fasta',args.sbatch_processes,f'{args.output_prefix}_sbatch_results','barcodes.fasta')
+        else:
+            for i in range(args.sbatch_start_i,args.sbatch_start_i+args.sbatch_processes):
+                copy(f'{args.barcode_file}/{i}_all_unused_barcodes_new.fasta', f'{args.output_prefix}_sbatch_results/{i}/barcodes.fasta')
         sbatch_processes = args.sbatch_processes
         
     elif args.share_pad == 'same_origin':

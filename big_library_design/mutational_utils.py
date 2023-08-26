@@ -136,7 +136,7 @@ def parse_input_sequences(seqs):
     if type(seqs)==str:
         if os.path.isfile(seqs):
             extension = seqs.rsplit('.',1)[1]
-            if extension == 'fasta':
+            if extension == 'fasta' or extension == 'fa':
                 return list(SeqIO.parse(seqs, "fasta"))
             elif extension == 'tsv':
                 df = pd.read_table(seqs)
@@ -145,7 +145,7 @@ def parse_input_sequences(seqs):
                 for name_col, seq_col in name_seq_columns:
                     if name_col in cols and seq_col in cols:
                         df[seq_col] = df[seq_col].str.strip()
-                        return df.apply(lambda row: SeqIO.SeqRecord(Seq.Seq(_get_dna_from_SeqRecord(row[seq_col])),
+                        return df.apply(lambda row: SeqIO.SeqRecord(Seq.Seq(_get_dna_from_SeqRecord(row[seq_col].strip())),
                                                   name=str(row[name_col])), axis=1).to_list()
                 print("ERROR recognized tsv but did not recognize column nammes, please submmit and issue to request new input format.")
             else:
@@ -239,6 +239,7 @@ def get_used_barcodes(fasta, start, end, gu_present = False,num_bp=None,unique=T
     '''
 
     all_seqs = parse_input_sequences(fasta)
+
     test_barcode = _get_dna_from_SeqRecord(all_seqs[0])[start:end+1]
     print(_get_dna_from_SeqRecord(all_seqs[0]))
     print(f"Confirm {test_barcode} is a correct barcode, otherwise change start and end.")
@@ -580,6 +581,64 @@ def get_all_double_mutants(fasta, regionAs, regionBs,
     return all_double_mutants
 
 
+def get_bp_mutants(fasta, bp_sets, out_fasta=None,
+                    mutate_dict={'AT':['AC','GC'],
+                                 'TA':['CA','CG'],
+                                 'CG':['CA','TA'],
+                                 'GC':['AC','AT'],
+                                 'GT':['TT','TA'],
+                                 'TG':['TT','AT']},
+                    other_mutate=[]):
+    '''
+    For each base-pair specified get mutants of that base paired as specified by mutate_dict.
+    Any base pair not specified in the dictionary will be mutated to the pairs in other_mutate.
+    
+    # TODO ask RD what he wants as default
+    # TODO document
+    '''
+    print(f"Getting mutants to the base pairs specified according it {mutate_dict}.")
+
+    # get all sequences and initialize
+    all_WT = parse_input_sequences(fasta)
+    all_mutants = []
+
+    # check user specified set of basepairs for every sequence in the fasta
+    if len(all_WT) != len(bp_sets):
+        print(f'WARNING: bps must be a list, one for each sequence in fasta, of lists of basepairs to rescue for that sequence. You have {len(all_WT)} inputted sequences and {len(bp_sets)} base-pair sets.')
+
+    for record, bps in zip(all_WT, bp_sets):
+
+        seq = _get_dna_from_SeqRecord(record)
+
+        # at each base pair, get rescue mutants
+        for bp in bps:
+            current_bp = seq[bp[0]]+seq[bp[1]]
+            if current_bp in mutate_dict:
+                mutate_list = mutate_dict[current_bp]
+            else:
+                mutate_list = other_mutate
+            for new_bp in mutate_list:
+                # get mutant
+                # name according to convention, in order, index at 1
+                if bp[0] < bp[1]:
+                    name = f' {record.id}_{bp[0]}{seq[bp[0]]}-{new_bp[0]}_{bp[1]}{seq[bp[1]]}-{new_bp[1]}'
+                    new_seq = seq[:bp[0]]+new_bp[0] + \
+                        seq[bp[0]+1:bp[1]]+new_bp[1]+seq[bp[1]+1:]
+                else:
+                    name = f' {record.id}_{bp[1]}{seq[bp[1]]}-{new_bp[1]}_{bp[0]}{seq[bp[0]]}-{new_bp[0]}'
+                    new_seq = seq[:bp[1]]+new_bp[1] + \
+                        seq[bp[1]+1:bp[0]]+new_bp[0]+seq[bp[0]+1:]
+                new_mut = SeqIO.SeqRecord(
+                    Seq.Seq(new_seq), name, '', '')
+                all_mutants.append(new_mut)
+
+    # save file
+    if out_fasta is not None:
+        SeqIO.write(all_mutants, out_fasta, "fasta")
+        print(f'Saved all mutants to {out_fasta}.')
+
+    return all_mutants
+
 def get_wcf_rescue_mutants(fasta, bp_sets, out_fasta=None,
                            wfc_base_pairs=['AT', 'TA', 'CG', 'GC']):
     '''
@@ -709,7 +768,7 @@ def delete_used_barcodes(all_barcode,used_barcodes,out_fasta):
         else:
             new_uids.append(SeqIO.SeqRecord(Seq.Seq(uid[0]),uid[1],'',''))
 
-    print('now writing')
+    print('now ahuffling and then writing')
     
     #for i,uid in enumerate(new_uids_filter):
     #    if i % 1000000:
