@@ -5,7 +5,7 @@ from random import shuffle
 from Bio import SeqIO
 from arnie.bpps import bpps
 
-from big_library_design.mutational_utils import get_reverse_complement
+from big_library_design.mutational_utils import get_reverse_complement, plot_punpaired
 
 BASES = ["A", "C", "G", "U"]
 INCOMPLETE_SEQ = {'N': ['A', 'C', 'T', 'G'],
@@ -97,14 +97,8 @@ class LibSeq:
         if save: self.bpp = bpp
         return bpp
 
-    def check_struct(self, 
-        regions, epsilon_interaction,
-        epsilon_paired,
-                     epsilon_avg_paired,
-                     epsilon_punpaired,
-                     epsilon_avg_punpaired,
-                     prob_factor={'unpaired': 1,
-                                  'paired': 1, 'interaction': 1}):
+    # TODO clean-up with a probability dictionary, like factor dict
+    def check_struct(self, regions, epsilon_interaction,epsilon_paired,epsilon_avg_paired,epsilon_punpaired,epsilon_avg_punpaired,prob_factor={'unpaired': 1,'paired': 1, 'interaction': 1}):
         
         p_unpaired = 1-self.bpp.sum(axis=0)
 
@@ -141,15 +135,9 @@ class LibSeq:
 
         return results
 
-
-    def prepare_seq(self, const5, const3, unused_barcodes,
-        bc_str,
-        pmax_noninteract,
-                        pmin_paired,
-                        pavg_paired,
-                        pmin_unpaired,
-                        pavg_unpaired):
+    def prepare_seq(self, length, const5, const3, unused_barcodes,bc_str,pmax_noninteract,pmin_paired,pavg_paired,pmin_unpaired,pavg_unpaired):
         # TODO padding
+        self.soi = self.soi[:length] # TODO real padding...
         good_seq = False
         self.stuct_str = ("C"*len(const5)) + ("0"*len(self.soi)) + bc_str + ("C"*len(const3)) # TODO padding, (,[,{,<>}]) and L for unpaired
         regions = self.parse_struct_str()
@@ -175,19 +163,8 @@ class LibSeq:
 
 
 class Library:
-    # TODO output need to change U to T again
-    def __init__(self, input_file, lib_length, barcode_added = False,
-        const5="GGGAACGACTCGAGTAGAGTCGAAAA", const3="AAAAGAAACAACAACAACAAC",
-        barcode_numbp=8,
-        barcode_loop="UUCG",barcode_num5randomhang=0,
-        barcode_num5polyA=2,
-        min_edit=2,barcode_stem_gu_present=False,
-        num_replicates=1,
-        Pmax_noninteract=0.05,
-        Pmin_paired=0.75,
-        Pavg_paired=0.85,
-        Pmin_unpaired=0.75,
-        Pavg_unpaired=0.85):
+
+    def __init__(self, input_file, lib_length, barcode_added = False,const5="GGGAACGACTCGAGTAGAGTCGAAAA", const3="AAAAGAAACAACAACAACAAC",barcode_numbp=8,barcode_loop="UUCG",barcode_num5randomhang=0,barcode_num5polyA=2,min_edit=2,barcode_stem_gu_present=False,num_replicates=1,Pmax_noninteract=0.05,Pmin_paired=0.75,Pavg_paired=0.85,Pmin_unpaired=0.75,Pavg_unpaired=0.85):
 
         # initialize
         self.libseqs = []
@@ -278,7 +255,7 @@ class Library:
             # TODO save to file instead???
         for seq in self.libseqs:
 
-            self.unused_barcodes = seq.prepare_seq(self.const5,self.const3,self.unused_barcodes,
+            self.unused_barcodes = seq.prepare_seq(self.length,self.const5,self.const3,self.unused_barcodes,
                         self.bc_str,
                         self.struct_pmax_noninteract,
                         self.struct_pmin_paired,
@@ -286,6 +263,26 @@ class Library:
                         self.struct_pmin_unpaired,
                         self.struct_pavg_unpaired)
 
+    def plot_punpaired(self,save_image):
+        p_unpaired = {}
+        seqs = []
+        muts = [] # location of 1 in struct_str
+        pad_lines = [] # if empty don't draw anything
+        # TODO save mutation name etc in common format?
+        for seq in self.libseqs:
+            seqs.append(self.const5 + seq.get_seq() + self.const3)
+            p_unpaired[seq.name+seq.description] = 1-seq.bpp.sum(axis=0)
+            # TODO only if type is M2seq...???
+            muts.append([i for i, x in enumerate(seq.struct_str) if x == "1"])
+            if "L" in seq.struct_str: # has pads
+                pads_lines.append([seq.struct_str.index("0"),seq.struct_str.rindex("0")]) # TODO or 1 ...
+            else:
+                pad_lines.append([])
+        lines = [len(self.const5),len(self.const5)+self.length,len(self.const5)+self.length+len(self.bc_str)] # locatino of barcode, const
+        xlabels = range(len(seqs[0]))
+        plot_punpaired(p_unpaired, xlabels, seqs, muts, lines, pad_lines, save_image)
+
+    # TODO output need to change U to T again, probably an Experiment level property?
 
 class WindowLibrary(Library):
     def __init__(self, const5, const3):
@@ -295,7 +292,7 @@ class WindowLibrary(Library):
 
 class Expirement:
     def __init__(self):
-        libs = []
+        self.libs = []
 
 
 '''
