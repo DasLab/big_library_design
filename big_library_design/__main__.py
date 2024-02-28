@@ -89,6 +89,8 @@ library.add_argument('--barcode_stem_gu_present', action='store_true',
                      help='IF the list of used barcodes is a simple stem, but has GU pairs, this will check both side of the stem.')
 library.add_argument('--pad_polyAhang_other_side',type=int,default=0,
                       help='Number nucleotides (only +1 possible) to have a polyA, single-stranded hang between sequence and library element on 3end.'  )
+library.add_argument('--pad_max_length_stem',type=int,default=10,
+                        help='For padding define the maximum stem length added.')
 library.add_argument('--sbatch_start_i',type=int,default=0)
 
 window = parser.add_argument_group('window')
@@ -121,6 +123,7 @@ m2seq.add_argument('--pad_num_samples', type=int, default=30,
                    help="Minimum number of sequences to check pad's effect on structure.")
 m2seq.add_argument('--pad_to_length', type=int, default=None,
                      help='Length of sequence to pad to, if nothing, longest length in fasta file.')
+m2seq.add_argument('--pad_max_prop_bad',type=float,default=0.2)
 m2seq.add_argument('--wcf_swap_only', action='store_true',
                      help='Only mutate A<->U and C<->G resulting in N mutants (as opposed to the full 3N).')
 
@@ -254,7 +257,9 @@ elif args.just_library:
                               pad_hang=args.pad_hang,
                               # pad_polyAhang, num_barcode_before_reduce, percent_reduce_prob
                               #, ,pad_max_prop_bad, pad_side
-                              #min_length_stem,  num_pads_reduce  max_length_stem
+                              #min_length_stem,  num_pads_reduce  
+                              pad_max_prop_bad=args.pad_max_prop_bad,
+                              max_length_stem=args.pad_max_length_stem,
                               pad_polyAhang = args.pad_polyAhang,
                               pad_min_num_samples=args.pad_num_samples,
                               pad_to_length=args.pad_to_length,
@@ -459,6 +464,8 @@ elif args.m2seq:
                                   # pad_polyAhang, num_barcode_before_reduce, percent_reduce_prob
                                   #, ,pad_max_prop_bad, pad_side
                                   #min_length_stem,  num_pads_reduce  max_length_stem
+                                  pad_max_prop_bad=args.pad_max_prop_bad,
+                                  max_length_stem=args.pad_max_length_stem,
                                   pad_polyAhang = args.pad_polyAhang,
                                   pad_min_num_samples=args.pad_num_samples,
                                   pad_to_length=args.pad_to_length,
@@ -509,6 +516,8 @@ elif args.m2seq_with_double:
                                   # pad_polyAhang, num_barcode_before_reduce, percent_reduce_prob
                                   #, ,pad_max_prop_bad, pad_side
                                   #min_length_stem,  num_pads_reduce  max_length_stem
+                                  pad_max_prop_bad=args.pad_max_prop_bad,
+                                  max_length_stem=args.pad_max_length_stem,
                                   pad_polyAhang = args.pad_polyAhang,
                                   pad_min_num_samples=args.pad_num_samples,
                                   pad_to_length=args.pad_to_length,

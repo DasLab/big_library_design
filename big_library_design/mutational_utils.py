@@ -459,7 +459,7 @@ def clean_fasta(fasta,out_fasta):
 
 def get_name_SeqRecord(seq):
     name = str(seq.name)
-    if seq.description != '<unknown description>':
+    if seq.description != '<unknown description>' and seq.description != name:
         name += seq.description
     return name.replace('/','__').replace(' ','_')
 
@@ -1484,7 +1484,7 @@ def add_library_elements(fasta, out_fasta=None,
                               percent_reduce_prob=10, min_edit=2,
                               pad_loop=TETRALOOP, pad_hang=0, pad_polyAhang=3, pad_min_num_samples=30,
             pad_max_prop_bad=0.05, pad_side='both',
-            min_length_stem=6, max_length_stem=16,
+            min_length_stem=5, max_length_stem=12,
             num_pads_reduce=100, pad_to_length=None,
             barcode_file=None,
             num_replicates=1,
@@ -1587,6 +1587,7 @@ ence of different length are just truncated (all)
         desired_len = max(seq_by_length.keys())
     else:
         desired_len = pad_to_length
+    print(f"Padding all to {desired_len}")
     porp_reduce = (1-(percent_reduce_prob/100))
 
     if barcode_file is not None and share_pad not in ['none','same_origin']:
@@ -1652,7 +1653,7 @@ ence of different length are just truncated (all)
             print(f"Searching for pad for group len {pad_length}.")
             print(f"Finding a {structs['5']['N']}nt 5' pad with {structs['5']['bp']}bp stem {structs['5']['hang_rand']}nt random hang {structs['5']['hang_polyA']}nt polyA hang.")
             print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
-            #print(regions)
+            # print(regions)
             # for each sequence search for good_pad
             for seq in tqdm(list(seqs)):
                 mutate_polyA = False
@@ -1693,7 +1694,7 @@ ence of different length are just truncated (all)
                                 mutate_polyA = True
                                 if barcode_num5polyA != 0:
                                     barcode_num5polyA -= 1
-                                    num5hang += 1
+                                    structs["3"]['hang_rand'] += 1
                                 if structs["3"]['hang_polyA'] != 0:
                                     structs["3"]['hang_rand'] += structs["3"]['hang_polyA']
                                     structs["3"]['hang_polyA'] = 0
@@ -1714,9 +1715,9 @@ ence of different length are just truncated (all)
                             else:
                                 full_seq_name = f'{get_name_SeqRecord(seq)}_{len(pad5)}pad{len(pad3)}_rep{rep}_libraryready'
                             # check if structure correct, save picture if specified and chance has it
-                            if False:#TODO(save_image_folder is not None) and (random() < save_bpp_fig):
+                            if (save_image_folder is not None) and (random() < save_bpp_fig):
                                 save_image = f'{save_image_folder}/{full_seq_name}.png'
-                                plot_lines = None # TODO lines
+                                plot_lines = None #[34,34+5,134-26,134,200-34]#None # TODO lines
                             else:
                                 save_image, plot_lines = None, None
 
@@ -1730,7 +1731,7 @@ ence of different length are just truncated (all)
                                                               epsilon_avg_punpaired=epsilon_avg_punpaired,
                                                               epsilon_paired=epsilon_paired,
                                                               epsilon_avg_paired=epsilon_avg_paired,
-                                                              save_image=save_image,prob_factor=prob_factor)
+                                                              save_image=save_image,lines=plot_lines,prob_factor=prob_factor)
 
                             # if barcode fails, get new barcode and start again
                             barcode_fail = False
@@ -2086,7 +2087,7 @@ ence of different length are just truncated (all)
 
             print(f"Finding a {structs['5']['N']}nt 5' pad with {structs['5']['bp']}bp stem {structs['5']['hang_rand']}nt random hang {structs['5']['hang_polyA']}nt polyA hang.")
             print(f"Finding a {structs['3']['N']}nt 3' pad with {structs['3']['bp']}bp stem {structs['3']['hang_rand']}nt random hang {structs['3']['hang_polyA']}nt polyA hang.")
-
+            # print(regions)
             # loop through to find pad that works
             good_pad = False
             prob_factor = {}
@@ -2139,7 +2140,8 @@ ence of different length are just truncated (all)
                                                           epsilon_punpaired=epsilon_punpaired,
                                                           epsilon_avg_punpaired=epsilon_avg_punpaired,
                                                           epsilon_paired=epsilon_paired,
-                                                          epsilon_avg_paired=epsilon_avg_paired)
+                                                          epsilon_avg_paired=epsilon_avg_paired,
+                                                          prob_factor=prob_factor)
 
                         # if barcode fails, get new barcode and start again
                         barcode_fail = False
@@ -2211,9 +2213,6 @@ ence of different length are just truncated (all)
 
     else:
         print("ERROR share_pad option not recognized.")
-
-    
-
 
     return lib
 
@@ -2785,7 +2784,7 @@ def _get_5_3_split(length, hang, polyAhang, min_length_stem, max_length_stem, pa
             if length % 2 != 0:
                 structs["3"]['N'] += 1
 
-        # if enough for 1 stem but not too much for 2 stema, make just 1 stem
+        # if enough for 1 stem but not too much for 2 stems, make just 1 stem
         elif length-add_3_3 < max_pad_for_stem:
             structs["3"]['N'] = length -add_3_3
             structs["3"]['bp'] = (length-unpaired_length)//2
